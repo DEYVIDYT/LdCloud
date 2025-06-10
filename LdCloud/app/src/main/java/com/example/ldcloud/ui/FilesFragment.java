@@ -111,7 +111,8 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
         // For simplicity in this environment, I'm calling it directly.
         // In a real Android app, use AsyncTask, Coroutines, or ExecutorService.
         new Thread(() -> {
-            List<ArchiveFile> files = internetArchiveService.listFilesAndFolders(itemTitle);
+            // Pass null or "" for currentPath to list root directory
+            List<ArchiveFile> files = internetArchiveService.listFilesAndFolders(itemTitle, null);
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     progressBarLoadingFiles.setVisibility(View.GONE);

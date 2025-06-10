@@ -37,7 +37,7 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
 
         String details;
         if (file.isDirectory()) {
-            holder.fileIcon.setImageResource(android.R.drawable.ic_folder); // Standard folder icon
+            holder.fileIcon.setImageResource(R.drawable.ic_vector_folder); // Use new vector drawable
             details = "Folder | Modified: " + file.getLastModifiedDate();
             holder.downloadButton.setVisibility(View.GONE); // Hide download for directories
         } else {
