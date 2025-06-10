@@ -493,4 +493,148 @@ public class InternetArchiveService {
         }
         return false;
     }
+
+    public boolean renameFolderAndIndex(ArchiveFile oldFolderData, String newFolderName, String parentJsonPath, String iaItemTitle) {
+        Log.d(TAG, "renameFolderAndIndex: Renomeando '" + oldFolderData.name + "' para '" + newFolderName + "'. JSON Antigo: " + oldFolderData.jsonPath + ", JSON Pai: " + parentJsonPath);
+
+        if (oldFolderData.jsonPath == null || oldFolderData.jsonPath.isEmpty()) {
+            Log.e(TAG, "renameFolderAndIndex: Caminho JSON da pasta antiga é nulo ou vazio.");
+            return false;
+        }
+        if (gitHubService == null) {
+            Log.e(TAG, "renameFolderAndIndex: GitHubService não está inicializado.");
+            return false;
+        }
+
+
+        // 1. Gerar o novo nome/caminho do arquivo JSON para a pasta renomeada
+        String newSanitizedFolderName = newFolderName.replaceAll("[^a-zA-Z0-9-_]", "");
+        String newDirJsonFileName;
+
+        // Lógica de nomenclatura para o novo arquivo JSON (tentativa de manter estrutura)
+        // Se oldFolderData.jsonPath for "a/b/c_oldName.json", e parentJsonPath for "a/b.json" (ou "a/b/index.json")
+        // newDirJsonFileName deve ser "a/b/c_newName.json"
+        // Esta lógica simplificada assume que o nome do arquivo JSON reflete o nome da pasta e o aninhamento.
+        // Uma abordagem mais robusta poderia envolver a análise de parentJsonPath para determinar o prefixo do caminho.
+
+        // Simplificação: Se oldFolderData.jsonPath é "prefix_oldName.json", o novo será "prefix_newName.json".
+        // Se não houver "_", assume-se que é "oldName.json" -> "newName.json".
+        // Isso é frágil se os nomes de arquivo JSON não seguirem essa convenção estrita.
+        // A lógica de FilesFragment é: baseNameDoPai + "_" + nomeDaNovaPasta + ".json"
+        // Ex: pai = "root.json", nova pasta "docs" -> "root_docs.json"
+        // Ex: pai = "root_docs.json", nova pasta "work" -> "root_docs_work.json"
+
+        String parentBaseNameForNewJson;
+        int lastDotParent = parentJsonPath.lastIndexOf('.');
+        if (lastDotParent > -1) {
+            parentBaseNameForNewJson = parentJsonPath.substring(0, lastDotParent);
+        } else {
+            parentBaseNameForNewJson = parentJsonPath; // Se não houver extensão, use o caminho todo
+        }
+        // Substituir / por _ para manter a convenção de nome de arquivo "plano"
+        parentBaseNameForNewJson = parentBaseNameForNewJson.replace("/", "_");
+        newDirJsonFileName = parentBaseNameForNewJson + "_" + newSanitizedFolderName + ".json";
+
+        // Se oldFolderData.jsonPath for o rootJsonPath, a lógica acima pode não ser ideal.
+        // Ex: rootJsonPath = "ldcloud_root.json". Se renomeamos uma pasta nela,
+        // newDirJsonFileName será "ldcloud_root_newFolderName.json"
+        // Isso parece uma convenção aceitável para a estrutura "plana" de arquivos JSON.
+
+        Log.d(TAG, "renameFolderAndIndex: Novo nome do arquivo JSON gerado: " + newDirJsonFileName);
+
+        JSONObject oldFolderContentJson;
+
+        // 2. Ler conteúdo do JSON antigo
+        try {
+            oldFolderContentJson = gitHubService.getJsonFileContent(oldFolderData.jsonPath);
+            if (oldFolderContentJson == null) {
+                Log.e(TAG, "renameFolderAndIndex: Não foi possível ler o conteúdo do JSON antigo: " + oldFolderData.jsonPath + " (arquivo não encontrado ou erro).");
+                return false;
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "renameFolderAndIndex: IOException ao ler JSON antigo " + oldFolderData.jsonPath, e);
+            return false;
+        }
+
+        // 3. Criar novo arquivo JSON com o conteúdo antigo
+        try {
+            if (!gitHubService.updateJsonFile(newDirJsonFileName, oldFolderContentJson, "Renomeada pasta de '" + oldFolderData.name + "' para '" + newFolderName + "' (criação do novo JSON)")) {
+                Log.e(TAG, "renameFolderAndIndex: Falha ao criar o novo arquivo JSON: " + newDirJsonFileName);
+                return false;
+            }
+            Log.i(TAG, "renameFolderAndIndex: Novo arquivo JSON '" + newDirJsonFileName + "' criado com sucesso com conteúdo antigo.");
+        } catch (IOException e) {
+            Log.e(TAG, "renameFolderAndIndex: IOException ao criar novo arquivo JSON " + newDirJsonFileName, e);
+            return false;
+        }
+
+        // 4. Deletar arquivo JSON antigo (APÓS criar o novo com sucesso)
+        try {
+            if (!gitHubService.deleteJsonFile(oldFolderData.jsonPath, "Renomeada pasta de '" + oldFolderData.name + "' para '" + newFolderName + "' (deleção do JSON antigo)")) {
+                Log.w(TAG, "renameFolderAndIndex: Falha ao deletar o arquivo JSON antigo: " + oldFolderData.jsonPath + ". A renomeação pode estar incompleta.");
+                // Considerar reverter a criação do novo arquivo se a deleção falhar criticamente.
+            } else {
+                Log.i(TAG, "renameFolderAndIndex: Arquivo JSON antigo '" + oldFolderData.jsonPath + "' deletado com sucesso.");
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "renameFolderAndIndex: IOException ao deletar arquivo JSON antigo " + oldFolderData.jsonPath + ". Erro: " + e.getMessage());
+        }
+
+        // 5. Atualizar JSON Pai
+        try {
+            JSONObject parentJson = gitHubService.getJsonFileContent(parentJsonPath);
+            if (parentJson == null) {
+                Log.e(TAG, "renameFolderAndIndex: JSON pai não encontrado em " + parentJsonPath + ". Não é possível atualizar a referência da pasta. Estado inconsistente no GitHub!");
+                return false;
+            }
+            JSONArray entries = parentJson.optJSONArray("entries");
+            if (entries == null) {
+                Log.e(TAG, "renameFolderAndIndex: JSON pai " + parentJsonPath + " não contém 'entries'. Estado inconsistente.");
+                return false;
+            }
+
+            boolean entryUpdatedInParent = false;
+            for (int i = 0; i < entries.length(); i++) {
+                JSONObject entry = entries.getJSONObject(i);
+                if ("directory".equalsIgnoreCase(entry.optString("type")) &&
+                    oldFolderData.name.equals(entry.optString("name")) &&
+                    oldFolderData.jsonPath.equals(entry.optString("json_path"))) {
+
+                    entry.put("name", newFolderName);
+                    entry.put("json_path", newDirJsonFileName);
+                    entry.put("last_modified", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()));
+                    entryUpdatedInParent = true;
+                    break;
+                }
+            }
+
+            if (!entryUpdatedInParent) {
+                Log.e(TAG, "renameFolderAndIndex: Não foi possível encontrar a entrada da pasta antiga '" + oldFolderData.name + "' com jsonPath '" + oldFolderData.jsonPath + "' no JSON pai: " + parentJsonPath);
+                // Isso pode indicar um estado inconsistente se o novo arquivo foi criado e o antigo deletado.
+                return false;
+            }
+
+            if (!gitHubService.updateJsonFile(parentJsonPath, parentJson, "Renomeada subpasta '" + oldFolderData.name + "' para '" + newFolderName + "'")) {
+                Log.e(TAG, "renameFolderAndIndex: Falha ao atualizar o JSON pai: " + parentJsonPath + " com a pasta renomeada.");
+                return false;
+            }
+            Log.i(TAG, "renameFolderAndIndex: JSON pai '" + parentJsonPath + "' atualizado com sucesso para refletir a pasta renomeada.");
+
+        } catch (IOException | JSONException e) {
+            Log.e(TAG, "renameFolderAndIndex: Erro ao atualizar JSON pai " + parentJsonPath, e);
+            return false;
+        }
+
+        // 6. (Opcional) Renomear Marcador S3 no Internet Archive
+        // Esta parte é mais complexa porque S3 não tem uma operação de "renomear" pasta.
+        // Envolve listar todos os objetos sob o prefixo antigo, copiar para o novo prefixo, e depois deletar os originais.
+        // Para um simples "marcador de pasta" (objeto de 0 bytes), seria deletar o antigo e criar um novo.
+        // A lógica para s3FolderPath em createNewFolder era: parentS3Path + newFolderName + "/"
+        // Se oldFolderData não armazena seu próprio s3Prefix, precisaríamos derivá-lo ou construí-lo.
+        // Para esta subtask, vamos focar na renomeação do índice JSON. A renomeação S3 é complexa.
+        Log.i(TAG, "renameFolderAndIndex: Renomeação do índice JSON concluída. Marcadores S3 não foram alterados nesta etapa.");
+
+
+        return true;
+    }
 }

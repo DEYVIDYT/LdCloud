@@ -40,22 +40,32 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
             holder.fileIcon.setImageResource(R.drawable.ic_vector_folder);
             details = "Folder | Modified: " + file.lastModified; // Use public field
             holder.downloadButton.setVisibility(View.GONE);
-            holder.itemView.setOnClickListener(v -> { // Click listener for the whole item
+            holder.itemView.setOnClickListener(v -> {
                 if (callbacks != null) {
                     callbacks.onDirectoryClicked(file);
                 }
             });
+            // Configurar LongClickListener para diretórios
+            holder.itemView.setOnLongClickListener(v -> {
+                if (callbacks != null) {
+                    callbacks.onDirectoryLongClicked(file);
+                    return true; // Consumiu o evento de clique longo
+                }
+                return false;
+            });
         } else {
             holder.fileIcon.setImageResource(android.R.drawable.ic_menu_gallery);
-            details = "Size: " + file.size + " bytes | Modified: " + file.lastModified; // Use public fields
+            details = "Size: " + file.size + " bytes | Modified: " + file.lastModified;
             holder.downloadButton.setVisibility(View.VISIBLE);
             holder.downloadButton.setOnClickListener(v -> {
                 if (callbacks != null) {
                     callbacks.onDownloadRequested(file);
                 }
             });
-            holder.itemView.setOnClickListener(null); // No special action for clicking file item itself (only download button)
+            holder.itemView.setOnClickListener(null);
             holder.itemView.setClickable(false);
+            holder.itemView.setOnLongClickListener(null); // Sem ação de clique longo para arquivos
+            holder.itemView.setLongClickable(false);
         }
         holder.fileDetails.setText(details);
     }

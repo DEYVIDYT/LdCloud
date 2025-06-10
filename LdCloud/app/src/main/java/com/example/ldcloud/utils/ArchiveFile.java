@@ -1,6 +1,10 @@
 package com.example.ldcloud.utils;
 
-public class ArchiveFile {
+import java.io.Serializable; // Adicionado
+
+public class ArchiveFile implements Serializable { // Implementa Serializable
+    private static final long serialVersionUID = 1234567L; // Adicionado serialVersionUID
+
     public String name;
     public boolean isDirectory;
     public String size; // Manter como String para consistência ("DIR" ou tamanho em bytes)

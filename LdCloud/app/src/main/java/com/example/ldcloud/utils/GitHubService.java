@@ -212,4 +212,84 @@ public class GitHubService {
             throw new IOException("Erro durante a atualização do arquivo no GitHub: " + e.getMessage(), e);
         }
     }
+
+    public boolean deleteJsonFile(String filePath, String commitMessage) throws IOException {
+        if (owner == null || repo == null) {
+            throw new IOException("Owner ou repositório do GitHub não configurado.");
+        }
+        if (token == null || token.isEmpty()) {
+            throw new IOException("Token do GitHub é necessário para deletar arquivos.");
+        }
+
+        String url = API_BASE_URL + owner + "/" + repo + "/contents/" + filePath;
+        String currentFileSha = null;
+
+        // 1. Obter o SHA do arquivo existente
+        Log.d(TAG, "deleteJsonFile: Tentando obter SHA para deletar arquivo: " + filePath);
+        Request getRequest = new Request.Builder().url(url)
+            .addHeader("Authorization", "token " + token)
+            .addHeader("Accept", "application/vnd.github.v3+json")
+            .get()
+            .build();
+
+        try (Response getResponse = httpClient.newCall(getRequest).execute()) {
+            if (getResponse.isSuccessful() && getResponse.body() != null) {
+                String getResponseBody = getResponse.body().string();
+                JSONObject getJsonResponse = new JSONObject(getResponseBody);
+                currentFileSha = getJsonResponse.optString("sha");
+                if (currentFileSha == null || currentFileSha.isEmpty()) {
+                    Log.e(TAG, "deleteJsonFile: SHA não encontrado na resposta para " + filePath + ". O arquivo existe?");
+                    throw new IOException("SHA do arquivo não encontrado para deleção: " + filePath);
+                }
+                Log.d(TAG, "deleteJsonFile: SHA obtido para " + filePath + ": " + currentFileSha);
+            } else if (getResponse.code() == 404) {
+                Log.w(TAG, "deleteJsonFile: Arquivo não encontrado (404) para deletar: " + filePath + ". Nada a fazer.");
+                return false;
+            } else {
+                String errorBody = getResponse.body() != null ? getResponse.body().string() : "Erro desconhecido";
+                Log.e(TAG, "deleteJsonFile: Falha ao obter SHA para " + filePath + ". Código: " + getResponse.code() + " - " + errorBody);
+                throw new IOException("Falha ao obter SHA para deleção: " + getResponse.code() + " - " + errorBody);
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "deleteJsonFile: Erro ao parsear JSON para obter SHA de " + filePath, e);
+            throw new IOException("Erro ao parsear resposta para obter SHA: " + e.getMessage(), e);
+        }
+        // Se currentFileSha ainda for nulo aqui, algo deu errado (embora o throw acima devesse pegar).
+        if (currentFileSha == null) {
+             Log.e(TAG, "deleteJsonFile: currentFileSha é nulo antes de tentar deletar " + filePath);
+             throw new IOException("Não foi possível obter o SHA do arquivo para deleção.");
+        }
+
+        // 2. Preparar payload e fazer DELETE request
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("message", commitMessage);
+            payload.put("sha", currentFileSha);
+        } catch (JSONException e) {
+            Log.e(TAG, "deleteJsonFile: Erro ao criar payload JSON para deleção de " + filePath, e);
+            throw new IOException("Erro ao criar payload JSON para deleção: " + e.getMessage(), e);
+        }
+
+        RequestBody body = RequestBody.create(payload.toString(), MediaType.get("application/json; charset=utf-8"));
+        Request deleteRequest = new Request.Builder().url(url)
+            .addHeader("Authorization", "token " + token)
+            .addHeader("Accept", "application/vnd.github.v3+json")
+            .delete(body)
+            .build();
+
+        Log.d(TAG, "deleteJsonFile: Tentando deletar arquivo: " + filePath + " com SHA: " + currentFileSha);
+        try (Response response = httpClient.newCall(deleteRequest).execute()) {
+            if (response.isSuccessful()) {
+                Log.i(TAG, "deleteJsonFile: Arquivo deletado com sucesso do GitHub: " + filePath + ". Código: " + response.code());
+                return true;
+            } else {
+                String errorBody = response.body() != null ? response.body().string() : "Erro desconhecido";
+                Log.e(TAG, "deleteJsonFile: Falha ao deletar arquivo no GitHub: " + filePath + ". Código: " + response.code() + " - " + errorBody);
+                throw new IOException("Falha ao deletar arquivo no GitHub: " + response.code() + " - " + errorBody);
+            }
+        } catch (IOException e) {
+             Log.e(TAG, "deleteJsonFile: Exceção durante a deleção do arquivo no GitHub: " + filePath, e);
+            throw e;
+        }
+    }
 }

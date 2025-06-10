@@ -37,11 +37,14 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton; //
 import java.io.File; // For creating local target file
 import java.util.ArrayList;
 import java.util.List;
-import android.os.Environment; // For getting downloads directory
+import android.os.Environment;
 
-public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbacks {
+// Importa a nova interface e o BottomSheet
+import com.example.ldcloud.ui.FolderActionsBottomSheet;
 
-    private static final String TAG = "FilesFragment";
+public class FilesFragment extends Fragment implements ArchiveFileAdapter.ArchiveFileAdapterCallbacks, FolderActionsBottomSheet.FolderActionsListener {
+
+    private static final String TAG = "FilesFragment"; // TAG já estava definido
     private static final String SHARED_PREFS_NAME = "LdCloudSettings";
     // IA S3 Bucket (Item Title)
     private static final String KEY_IA_ITEM_TITLE = "itemTitle";
@@ -62,7 +65,8 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
     private String iaItemTitle; // For S3 operations like creating folder markers
 
     private ActivityResultLauncher<String> requestPermissionLauncher;
-    // private Uri pendingFileUriForUpload; // Não usado com a lógica atual de pedir permissão ANTES
+    private final java.util.concurrent.ExecutorService fragmentExecutor = java.util.concurrent.Executors.newSingleThreadExecutor(); // Adicionado Executor
+
 
     public FilesFragment() {
         // Required empty public constructor
@@ -477,5 +481,100 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
             requireContext().startService(uploadIntent);
         }
         Toast.makeText(getContext(), "Upload de '" + fileName + "' iniciado...", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onDirectoryLongClicked(ArchiveFile directory) {
+        Log.d(TAG, "Clique longo detectado na pasta: " + directory.name + " (JSON Path: " + directory.jsonPath + ")");
+        FolderActionsBottomSheet bottomSheet = FolderActionsBottomSheet.newInstance(directory);
+        // O listener é setado em onAttach do BottomSheet usando getParentFragment(), que será este FilesFragment.
+        bottomSheet.show(getParentFragmentManager(), "FolderActionsBottomSheetTag");
+    }
+
+    // Implementação dos métodos de FolderActionsListener (serão adicionados em outro bloco)
+
+    @Override
+    public void onRenameFolderRequested(ArchiveFile folderToRename) {
+        Log.d(TAG, "Solicitação para renomear pasta: " + folderToRename.name);
+        showRenameFolderDialog(folderToRename);
+    }
+
+    @Override
+    public void onDeleteFolderRequested(ArchiveFile folderToDelete) {
+        Log.d(TAG, "Solicitação para excluir pasta: " + folderToDelete.name);
+        Toast.makeText(getContext(), "Excluir pasta: " + folderToDelete.name + " (funcionalidade pendente)", Toast.LENGTH_SHORT).show();
+        // Lógica de exclusão será implementada depois
+    }
+
+    private void showRenameFolderDialog(final ArchiveFile folder) {
+        if (getContext() == null) { return; }
+
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder = new com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext());
+        builder.setTitle("Renomear Pasta");
+
+        // Configurar o EditText para entrada do novo nome
+        final EditText input = new EditText(getContext());
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        input.setText(folder.name);
+        input.setHint("Novo nome da pasta");
+
+        // Adicionar padding ao EditText
+        android.widget.FrameLayout container = new android.widget.FrameLayout(requireContext());
+        android.widget.FrameLayout.LayoutParams params = new  android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        try {
+            int horizontalPadding = getResources().getDimensionPixelSize(com.google.android.material.R.dimen.mtrl_alert_dialog_padding_material);
+            params.leftMargin = horizontalPadding;
+            params.rightMargin = horizontalPadding;
+        } catch (Exception e) {
+            Log.w(TAG, "Falha ao obter mtrl_alert_dialog_padding_material, usando padding padrão.");
+            int defaultPadding = (int) (20 * getResources().getDisplayMetrics().density);
+            params.leftMargin = defaultPadding;
+            params.rightMargin = defaultPadding;
+        }
+        input.setLayoutParams(params);
+        container.addView(input);
+        builder.setView(container);
+
+
+        builder.setPositiveButton("Renomear", (dialog, which) -> {
+            String newName = input.getText().toString().trim();
+            if (!newName.isEmpty() && !newName.equals(folder.name)) {
+                Log.d(TAG, "Tentando renomear pasta '" + folder.name + "' para '" + newName + "' usando o serviço.");
+
+                fragmentExecutor.execute(() -> {
+                    boolean renameSuccess = false;
+                    String errorMessage = "Erro desconhecido ao renomear.";
+                    try {
+                        // iaItemTitle é um campo de classe, currentJsonPath também.
+                        renameSuccess = internetArchiveService.renameFolderAndIndex(folder, newName, currentJsonPath, iaItemTitle);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Exceção ao chamar renameFolderAndIndex", e);
+                        errorMessage = e.getMessage();
+                    }
+
+                    final boolean finalRenameSuccess = renameSuccess;
+                    final String finalErrorMessage = errorMessage;
+                    final String originalFolderName = folder.name;
+
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (finalRenameSuccess) {
+                                Toast.makeText(getContext(), "Pasta '" + originalFolderName + "' renomeada para '" + newName + "'", Toast.LENGTH_SHORT).show();
+                                loadFiles(currentJsonPath); // Atualizar a lista de arquivos
+                            } else {
+                                Toast.makeText(getContext(), "Falha ao renomear pasta: " + finalErrorMessage, Toast.LENGTH_LONG).show();
+                            }
+                        });
+                    }
+                });
+                // dialog.dismiss(); // Dialog é dispensado automaticamente, a menos que queiramos controle manual.
+            } else if (newName.isEmpty()) {
+                Toast.makeText(getContext(), "O nome da pasta não pode ser vazio.", Toast.LENGTH_SHORT).show();
+            } else {
+                dialog.dismiss();
+            }
+        });
+        builder.setNegativeButton("Cancelar", (dialog, which) -> dialog.cancel());
+        builder.show();
     }
 }
