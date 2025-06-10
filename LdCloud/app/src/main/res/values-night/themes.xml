@@ -1,7 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme for Dark Mode. -->
-    <!-- Parent updated to enable Dynamic Colors -->
-    <style name="Theme.LdCloud" parent="Theme.Material3.DayNight.DynamicColors.NoActionBar">
+    <!-- Parent reverted to non-DynamicColors version. Dynamic Colors should still apply on API 31+ if available. -->
+    <style name="Theme.LdCloud" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Color definitions for Primary, Secondary, Tertiary are commented out
              to allow Dynamic Colors to take effect on Android 12+.
         -->
@@ -52,13 +52,12 @@
     <!-- For example, if BottomNavigationView needs different icon/text tint logic in dark mode -->
      <style name="Widget.App.BottomNavigationView" parent="Widget.Material3.BottomNavigationView">
         <item name="android:background">?attr/colorSurface</item> <!-- Use dynamic surface -->
-        <item name="itemIconTint">@color/bnv_tab_item_foreground_dynamic</item> <!-- Use dynamic CSL -->
-        <item name="itemTextColor">@color/bnv_tab_item_foreground_dynamic</item> <!-- Use dynamic CSL -->
+         <item name="itemIconTint">@color/bnv_tab_item_foreground_dynamic</item>
+         <item name="itemTextColor">@color/bnv_tab_item_foreground_dynamic</item>
     </style>
 
     <style name="Widget.App.FloatingActionButton" parent="Widget.Material3.FloatingActionButton.Primary">
         <!-- tint should be handled by the parent M3 style using ?attr/colorOnPrimaryContainer or similar -->
-        <!-- <item name="tint">?attr/colorOnPrimary</item> -->
     </style>
 
 </resources>

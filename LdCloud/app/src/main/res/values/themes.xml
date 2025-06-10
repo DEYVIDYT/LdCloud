@@ -1,7 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <!-- Parent updated to enable Dynamic Colors -->
-    <style name="Theme.LdCloud" parent="Theme.Material3.DayNight.DynamicColors.NoActionBar">
+    <!-- Parent reverted to non-DynamicColors version. Dynamic Colors should still apply on API 31+ if available. -->
+    <style name="Theme.LdCloud" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Color definitions for Primary, Secondary, Tertiary are commented out
              to allow Dynamic Colors to take effect on Android 12+.
              On older versions, or when Dynamic Colors are off,
@@ -100,7 +100,7 @@
         -->
     </style>
 
-    <style name="ThemeOverlay.App.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog.DynamicColors">
+    <style name="ThemeOverlay.App.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <!-- Using .DynamicColors parent for AlertDialog ensures it also adapts.
              Specific color overrides might not be needed here if the parent is dynamic.
         <item name="colorPrimary">?attr/colorPrimary</item>
