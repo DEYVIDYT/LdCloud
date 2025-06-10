@@ -1,0 +1,15 @@
+{
+  "UserAgent": "LdCloud/1.0",
+  "Version": "1.0",
+  "IdentityManager": {
+    "Default": {}
+  },
+  "CredentialsProvider": {
+    "CognitoIdentity": {
+      "Default": {
+        "PoolId": "us-east-1:00000000-0000-0000-0000-000000000000",
+        "Region": "us-east-1"
+      }
+    }
+  }
+}
