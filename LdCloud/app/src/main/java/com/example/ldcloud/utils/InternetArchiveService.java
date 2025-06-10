@@ -16,7 +16,7 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.AmazonServiceException;
-import com.amazonaws.SdkClientException;
+import com.amazonaws.AmazonClientException; // Replaced SdkClientException
 
 // Standard Java imports
 import java.io.ByteArrayInputStream;
@@ -91,8 +91,8 @@ public class InternetArchiveService {
             return true;
         } catch (AmazonServiceException e) {
             Log.e(TAG, "S3 Connection Test Failed (AmazonServiceException): " + e.getMessage(), e);
-        } catch (SdkClientException e) {
-            Log.e(TAG, "S3 Connection Test Failed (SdkClientException): " + e.getMessage(), e);
+        } catch (AmazonClientException e) { // Replaced SdkClientException
+            Log.e(TAG, "S3 Connection Test Failed (AmazonClientException): " + e.getMessage(), e);
         } catch (Exception e) {
             Log.e(TAG, "S3 Connection Test Failed (Exception): " + e.getMessage(), e);
         }
@@ -185,8 +185,8 @@ public class InternetArchiveService {
 
         } catch (AmazonServiceException e) {
             Log.e(TAG, "AmazonServiceException listing S3 objects: " + e.getMessage(), e);
-        } catch (SdkClientException e) {
-            Log.e(TAG, "SdkClientException listing S3 objects: " + e.getMessage(), e);
+        } catch (AmazonClientException e) { // Replaced SdkClientException
+            Log.e(TAG, "AmazonClientException listing S3 objects: " + e.getMessage(), e);
         } catch (Exception e) {
             Log.e(TAG, "Unexpected exception listing S3 objects: " + e.getMessage(), e);
         }
@@ -223,8 +223,8 @@ public class InternetArchiveService {
             return true;
         } catch (AmazonServiceException e) {
             Log.e(TAG, "AmazonServiceException during S3 upload: " + e.getMessage(), e);
-        } catch (SdkClientException e) {
-            Log.e(TAG, "SdkClientException during S3 upload: " + e.getMessage(), e);
+        } catch (AmazonClientException e) { // Replaced SdkClientException
+            Log.e(TAG, "AmazonClientException during S3 upload: " + e.getMessage(), e);
         } catch (Exception e) {
             Log.e(TAG, "Unexpected exception during S3 upload: " + e.getMessage(), e);
         }
@@ -252,8 +252,8 @@ public class InternetArchiveService {
         } catch (AmazonServiceException e) {
             Log.e(TAG, "AmazonServiceException during S3 download: " + e.getMessage(), e);
             if (localTargetFile.exists()) { localTargetFile.delete(); }
-        } catch (SdkClientException e) {
-            Log.e(TAG, "SdkClientException during S3 download: " + e.getMessage(), e);
+        } catch (AmazonClientException e) { // Replaced SdkClientException
+            Log.e(TAG, "AmazonClientException during S3 download: " + e.getMessage(), e);
             if (localTargetFile.exists()) { localTargetFile.delete(); }
         } catch (Exception e) {
             Log.e(TAG, "Unexpected exception during S3 download: " + e.getMessage(), e);
