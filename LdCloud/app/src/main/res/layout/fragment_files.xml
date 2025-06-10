@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto" <!-- Moved xmlns:app here -->
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".ui.FilesFragment">
@@ -28,15 +29,14 @@
         android:visibility="gone" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_add_action" <!-- Renamed ID -->
+        android:id="@+id/fab_add_action"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="true"
         android:layout_alignParentBottom="true"
         android:layout_margin="16dp"
-        android:src="@android:drawable/ic_input_add" <!-- Changed Icon -->
-        android:contentDescription="Add Action" <!-- Changed Description -->
-        app:fabSize="normal"
-        xmlns:app="http://schemas.android.com/apk/res-auto"/>
+        android:src="@android:drawable/ic_input_add"
+        android:contentDescription="@string/add_action_description"
+        app:fabSize="normal" /> <!-- Removed xmlns:app from here -->
 
 </RelativeLayout>

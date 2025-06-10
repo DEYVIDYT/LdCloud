@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">LdCloud</string>
+    <string name="add_action_description">Adicionar nova pasta ou arquivo</string>
 </resources>
