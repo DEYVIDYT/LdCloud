@@ -157,7 +157,7 @@ public class LdUploadService extends Service {
                 Log.i(TAG, "Arquivo copiado para cache para upload: " + tempFileToUpload.getAbsolutePath() + ", Tamanho: " + tempFileToUpload.length());
             }
 
-            final File finalFileToUpload = tempFileToUpload; // Para uso no callback e no finally
+            final File finalFileToUpload = tempFileToUpload;
 
             InternetArchiveUploader uploader = new InternetArchiveUploader(iaAccessKey, iaSecretKey);
 
@@ -168,7 +168,7 @@ public class LdUploadService extends Service {
                 }
 
                 @Override
-                public void onSuccess(String fileUrl) {
+                public void onSuccess(String fileUrl) { // Parameter name 'fileUrl' is fine, type String matches 'message'
                     Log.i(TAG, "Upload para IA bem-sucedido para " + fileNameForDisplay + ". URL: " + fileUrl);
                     LdUploadService.this.updateNotification("Indexando " + fileNameForDisplay + "...", 100);
 
@@ -193,12 +193,25 @@ public class LdUploadService extends Service {
                         newEntry.put("type", "file");
                         newEntry.put("ia_s3_key", targetS3Key);
                         newEntry.put("ia_url", fileUrl);
-                        newEntry.put("size", String.valueOf(originalFileSize)); // Usar tamanho original para metadados
+                        newEntry.put("size", String.valueOf(originalFileSize));
                         newEntry.put("last_modified", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()));
 
-                        entries.put(newEntry);
+                        // Adicionar ou atualizar lógica (se necessário, por enquanto apenas adiciona)
+                        boolean entryExists = false;
+                        for (int i = 0; i < entries.length(); i++) {
+                            JSONObject currentEntry = entries.getJSONObject(i);
+                            if (fileNameForDisplay.equals(currentEntry.optString("name")) && "file".equals(currentEntry.optString("type"))) {
+                                entries.put(i, newEntry); // Atualiza a entrada existente
+                                entryExists = true;
+                                break;
+                            }
+                        }
+                        if (!entryExists) {
+                            entries.put(newEntry); // Adiciona nova entrada
+                        }
+                        // parentJson.put("entries", entries); // Não é necessário se 'entries' for uma referência direta
 
-                        if (gitHubService.updateJsonFile(parentJsonPath, parentJson, "Adicionado arquivo LdCloud: " + fileNameForDisplay)) {
+                        if (gitHubService.updateJsonFile(parentJsonPath, parentJson, "Adicionado/Atualizado arquivo LdCloud: " + fileNameForDisplay)) {
                             Log.i(TAG, "Indexação no GitHub para " + fileNameForDisplay + " bem-sucedida.");
                             LdUploadService.this.handleSuccess(fileNameForDisplay + " enviado e indexado!");
                         } else {
@@ -217,9 +230,9 @@ public class LdUploadService extends Service {
                 }
 
                 @Override
-                public void onError(String error) {
-                    Log.e(TAG, "Falha no upload para IA para " + fileNameForDisplay + ": " + error);
-                    LdUploadService.this.handleError("Falha no upload para IA: " + error, fileNameForDisplay);
+                public void onFailure(String errorMessage) { // Corrigido de onError para onFailure
+                    Log.e(TAG, "Falha no upload para IA (" + fileNameForDisplay + "): " + errorMessage);
+                    LdUploadService.this.handleError("Falha no upload para IA: " + errorMessage, fileNameForDisplay);
                     if (finalFileToUpload != null && finalFileToUpload.exists()) {
                         finalFileToUpload.delete();
                         Log.d(TAG, "Arquivo temporário de upload deletado devido a erro: " + finalFileToUpload.getName());
