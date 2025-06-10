@@ -41,6 +41,7 @@
         <item name="materialButtonStyle">@style/Widget.App.Button</item>
         <item name="textInputStyle">@style/Widget.App.TextInputLayout</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.App.MaterialAlertDialog</item>
+        <item name="materialIconButtonStyle">@style/Widget.Material3.Button.IconButton</item> <!-- Added this line -->
     </style>
 
     <!-- Component specific styles -->
