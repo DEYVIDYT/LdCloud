@@ -77,7 +77,7 @@ public class LdUploadService extends Service {
         Log.d(TAG, "onCreate: LdUploadService criando...");
 
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        createNotificationChannel();
+        createNotificationChannel(); // Log for channel creation is inside this method
 
         executorService = Executors.newSingleThreadExecutor();
         gitHubService = new GitHubService(this);
@@ -90,54 +90,70 @@ public class LdUploadService extends Service {
             Log.e(TAG, "PowerManager não disponível.");
         }
 
-        AWSMobileClient.getInstance().initialize(getApplicationContext(), new Callback<UserStateDetails>() {
-            @Override
-            public void onResult(UserStateDetails userStateDetails) {
-                Log.i(TAG, "AWSMobileClient inicializado. Estado do usuário: " + userStateDetails.getUserState());
-                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-                String iaAccessKey = prefs.getString(KEY_IA_ACCESS_KEY, null);
-                String iaSecretKey = prefs.getString(KEY_IA_SECRET_KEY, null);
+        // AWSMobileClient.getInstance().initialize(getApplicationContext(), new Callback<UserStateDetails>() {
+        //     @Override
+        //     public void onResult(UserStateDetails userStateDetails) {
+        //         Log.i(TAG, "AWSMobileClient inicializado. Estado do usuário: " + userStateDetails.getUserState());
+        //         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        //         String iaAccessKey = prefs.getString(KEY_IA_ACCESS_KEY, null);
+        //         String iaSecretKey = prefs.getString(KEY_IA_SECRET_KEY, null);
+        //
+        //         if (iaAccessKey != null && iaSecretKey != null) {
+        //             BasicAWSCredentials credentials = new BasicAWSCredentials(iaAccessKey, iaSecretKey);
+        //             s3Client = new AmazonS3Client(credentials, com.amazonaws.regions.Region.getRegion(com.amazonaws.regions.Regions.US_EAST_1));
+        //             s3Client.setEndpoint("s3.us.archive.org");
+        //
+        //             transferUtility = TransferUtility.builder()
+        //                             .context(getApplicationContext())
+        //                             .s3Client(s3Client)
+        //                             .awsConfiguration(AWSMobileClient.getInstance().getConfiguration())
+        //                             .build();
+        //             awsComponentsInitialized = true;
+        //             Log.i(TAG, "Componentes AWS (S3Client e TransferUtility) inicializados com sucesso.");
+        //         } else {
+        //             awsComponentsInitialized = false;
+        //             Log.e(TAG, "Falha ao inicializar componentes AWS: credenciais IA ausentes.");
+        //         }
+        //     }
+        //
+        //     @Override
+        //     public void onError(Exception e) {
+        //         awsComponentsInitialized = false;
+        //         Log.e(TAG, "Erro fatal ao inicializar AWSMobileClient! Componentes AWS não inicializados.", e);
+        //     }
+        // });
 
-                if (iaAccessKey != null && iaSecretKey != null) {
-                    BasicAWSCredentials credentials = new BasicAWSCredentials(iaAccessKey, iaSecretKey);
-                    s3Client = new AmazonS3Client(credentials, Region.getRegion(Regions.US_EAST_1));
-                    s3Client.setEndpoint("s3.us.archive.org");
+        this.awsComponentsInitialized = true; // TEMPORÁRIO PARA DIAGNÓSTICO
+        Log.w(TAG, "onCreate: INICIALIZAÇÃO AWS FOI CONTORNADA PARA DIAGNÓSTICO. awsComponentsInitialized = true.");
 
-                    transferUtility = TransferUtility.builder()
-                                        .context(getApplicationContext())
-                                        .s3Client(s3Client)
-                                        .awsConfiguration(AWSMobileClient.getInstance().getConfiguration())
-                                        .build();
-                    awsComponentsInitialized = true;
-                    Log.i(TAG, "Componentes AWS (S3Client e TransferUtility) inicializados com sucesso.");
-                } else {
-                    awsComponentsInitialized = false;
-                    Log.e(TAG, "Falha ao inicializar componentes AWS: credenciais IA ausentes.");
-                }
-            }
-
-            @Override
-            public void onError(Exception e) {
-                awsComponentsInitialized = false;
-                Log.e(TAG, "Erro fatal ao inicializar AWSMobileClient! Componentes AWS não inicializados.", e);
-            }
-        });
-        Log.d(TAG, "onCreate: LdUploadService criação concluída.");
+        Log.d(TAG, "onCreate: LdUploadService criação concluída (com inicialização AWS contornada).");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "onStartCommand: Recebido comando para iniciar upload.");
+        Log.d(TAG, "onStartCommand: SERVIÇO CHAMADO! Intent: " + intent); // Adicionado Log Inicial
+
         if (intent == null) {
             Log.w(TAG, "onStartCommand: Intent nulo, parando serviço.");
             stopSelf();
             return START_NOT_STICKY;
         }
 
-        Notification initialNotification = buildNotification("Preparando upload...", 0);
-        Log.d(TAG, "onStartCommand: Chamando startForeground com NOTIFICATION_ID_FOREGROUND: " + NOTIFICATION_ID_FOREGROUND);
-        startForeground(NOTIFICATION_ID_FOREGROUND, initialNotification);
-        Log.i(TAG, "onStartCommand: Serviço iniciado em primeiro plano.");
+        Log.d(TAG, "onStartCommand: Tentando chamar startForeground (TESTE DE DIAGNÓSTICO)...");
+        try {
+            Notification simpleNotification = buildNotification("Serviço de Upload Iniciado (Diagnóstico)", 0);
+            startForeground(NOTIFICATION_ID_FOREGROUND, simpleNotification);
+            Log.i(TAG, "onStartCommand: startForeground CHAMADO com sucesso (TESTE DE DIAGNÓSTICO)!");
+        } catch (Exception e) {
+            Log.e(TAG, "onStartCommand: ERRO AO CHAMAR startForeground (TESTE DE DIAGNÓSTICO)!", e);
+        }
+
+        // Comentado o restante da lógica original:
+        /*
+        // Notification initialNotification = buildNotification("Preparando upload...", 0);
+        // Log.d(TAG, "onStartCommand: Chamando startForeground com NOTIFICATION_ID_FOREGROUND: " + NOTIFICATION_ID_FOREGROUND);
+        // startForeground(NOTIFICATION_ID_FOREGROUND, initialNotification);
+        // Log.i(TAG, "onStartCommand: Serviço iniciado em primeiro plano.");
 
         if (wakeLock != null && !wakeLock.isHeld()) {
             Log.d(TAG, "onStartCommand: Adquirindo WakeLock.");
@@ -160,6 +176,7 @@ public class LdUploadService extends Service {
             }
             handleUploadAndIndex(fileUriString, fileNameForDisplay, targetS3Key, fileSize, iaItemTitle, parentJsonPath);
         });
+        */
 
         return START_NOT_STICKY;
     }
@@ -197,9 +214,9 @@ public class LdUploadService extends Service {
             return;
         }
 
-        if (!awsComponentsInitialized || transferUtility == null) {
-            Log.e(TAG, "Upload não pode prosseguir dentro de handleUploadAndIndex: Componentes AWS não estão inicializados.");
-            handleError("Serviço de upload não pronto (interno).", fileNameForDisplay);
+        if (!awsComponentsInitialized || transferUtility == null) { // This check will now rely on the artificial true for awsComponentsInitialized
+            Log.e(TAG, "Upload não pode prosseguir dentro de handleUploadAndIndex: Componentes AWS não estão inicializados (transferUtility é nulo).");
+            handleError("Serviço de upload não pronto (interno - transferUtility nulo).", fileNameForDisplay);
             if (fileToUpload != null && fileToUpload.exists()) {
                 fileToUpload.delete();
             }
