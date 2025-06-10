@@ -27,6 +27,7 @@ import androidx.appcompat.app.AlertDialog;
 import com.example.ldcloud.R;
 import com.example.ldcloud.utils.ArchiveFile;
 import com.example.ldcloud.utils.InternetArchiveService;
+import com.example.ldcloud.utils.LdUploadService; // Adicionado
 import com.google.android.material.floatingactionbutton.FloatingActionButton; // For the new FAB
 import java.io.File; // For creating local target file
 import java.util.ArrayList;
