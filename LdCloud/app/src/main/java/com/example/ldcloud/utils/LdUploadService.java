@@ -7,26 +7,43 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
+import android.content.SharedPreferences; // Adicionada para SharedPreferences
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.util.Log;
+// import android.util.Base64; // Não usado diretamente aqui
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
-// Importações da AWS SDK (serão mais usadas no Passo 3, mas podem ser adicionadas agora)
+import com.amazonaws.auth.BasicAWSCredentials; // Adicionado
 import com.amazonaws.mobile.client.AWSMobileClient;
 import com.amazonaws.mobile.client.Callback;
 import com.amazonaws.mobile.client.UserStateDetails;
+import com.amazonaws.mobileconnectors.s3.transferutility.TransferListener; // Adicionado
+import com.amazonaws.mobileconnectors.s3.transferutility.TransferObserver; // Adicionado
+import com.amazonaws.mobileconnectors.s3.transferutility.TransferState;   // Adicionado
 import com.amazonaws.mobileconnectors.s3.transferutility.TransferUtility;
-// import com.amazonaws.services.s3.AmazonS3Client; // Se for passar explicitamente para TransferUtility
+import com.amazonaws.regions.Region; // Importação completa
+import com.amazonaws.regions.Regions; // Importação completa
+import com.amazonaws.services.s3.AmazonS3Client; // Adicionado (já estava mas garantido)
 
-import com.example.ldcloud.MainActivity; // Para o PendingIntent da Notificação
+import com.example.ldcloud.MainActivity; // Para PendingIntent
 import com.example.ldcloud.R; // Para ícones de notificação
 
+import org.json.JSONArray;    // Adicionado
+import org.json.JSONObject;   // Adicionado
+import org.json.JSONException;  // Adicionado
+
+import java.io.File;                // Adicionado
+import java.io.FileOutputStream;    // Adicionado
+import java.io.IOException;         // Adicionado
+import java.io.InputStream;         // Adicionado
+import java.text.SimpleDateFormat;  // Adicionado
+import java.util.Date;              // Adicionado
+import java.util.Locale;            // Adicionado
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -81,7 +98,7 @@ public class LdUploadService extends Service {
         // Inicializar AWSMobileClient - essencial para TransferUtility
         // Esta inicialização é assíncrona. Operações que dependem dela devem esperar o callback.
         AWSMobileClient.getInstance().initialize(getApplicationContext(), new Callback<UserStateDetails>() {
-            @Override
+            @Override // Já estava presente, confirmado.
             public void onResult(UserStateDetails userStateDetails) {
                 Log.i(TAG, "AWSMobileClient inicializado. Estado do usuário: " + userStateDetails.getUserState());
                 // Inicializar TransferUtility aqui, pois depende do AWSMobileClient estar pronto.
@@ -107,7 +124,7 @@ public class LdUploadService extends Service {
                 }
             }
 
-            @Override
+            @Override // Adicionado @Override
             public void onError(Exception e) {
                 Log.e(TAG, "Erro ao inicializar AWSMobileClient!", e);
                 // Lidar com o erro - talvez parar o serviço ou notificar o usuário
@@ -128,7 +145,8 @@ public class LdUploadService extends Service {
 
         // Iniciar em primeiro plano com uma notificação inicial
         // O conteúdo da notificação será atualizado conforme o progresso
-        startForeground(NOTIFICATION_ID_FOREGROUND, createNotification("Preparando upload...", 0));
+        Notification initialNotification = buildNotification("Preparando upload...", 0); // Renamed call
+        startForeground(NOTIFICATION_ID_FOREGROUND, initialNotification);
 
         // Adquirir WakeLock antes de iniciar a tarefa no executor
         if (wakeLock != null && !wakeLock.isHeld()) {
@@ -223,7 +241,7 @@ public class LdUploadService extends Service {
                 Log.d(TAG, "onStateChanged: " + fileNameForDisplay + " - " + state);
                 if (state == com.amazonaws.mobileconnectors.s3.transferutility.TransferState.COMPLETED) {
                     Log.i(TAG, "Upload S3 para " + fileNameForDisplay + " COMPLETO.");
-                    updateNotification("Indexando " + fileNameForDisplay + "...", 100);
+                    LdUploadService.this.updateNotification("Indexando " + fileNameForDisplay + "...", 100);
 
                     try {
                         JSONObject parentJson = gitHubService.getJsonFileContent(parentJsonPath);
@@ -280,7 +298,7 @@ public class LdUploadService extends Service {
             @Override
             public void onProgressChanged(int id, long bytesCurrent, long bytesTotal) {
                 int progress = (int) ((double) bytesCurrent / bytesTotal * 100);
-                updateNotification("Enviando " + fileNameForDisplay + "...", progress);
+                LdUploadService.this.updateNotification("Enviando " + fileNameForDisplay + "...", progress);
             }
 
             @Override
@@ -294,6 +312,7 @@ public class LdUploadService extends Service {
 
     private void handleError(String errorMessage, String fileNameForDisplay) {
         Log.e(TAG, "Erro no upload de " + fileNameForDisplay + ": " + errorMessage);
+        // Esta chamada a updateNotification já está no escopo da classe LdUploadService, não precisa de LdUploadService.this
         updateNotification("Erro: " + fileNameForDisplay, -1);
         stopForeground(false);
         notificationManager.notify(NOTIFICATION_ID_FOREGROUND + 2, createFinalNotification("Erro no Upload de LdCloud", fileNameForDisplay + ": " + errorMessage, false));
@@ -302,6 +321,7 @@ public class LdUploadService extends Service {
 
     private void handleSuccess(String message) {
         Log.i(TAG, message);
+        // Esta chamada a updateNotification já está no escopo da classe LdUploadService, não precisa de LdUploadService.this
         updateNotification(message, 100);
         stopForeground(false);
         notificationManager.notify(NOTIFICATION_ID_FOREGROUND + 1, createFinalNotification("LdCloud Upload", message, true));
@@ -376,25 +396,32 @@ public class LdUploadService extends Service {
         }
     }
 
-    // Método para criar notificações (será expandido no Passo 3)
-    private Notification createNotification(String text, int progress) {
-        Intent notificationIntent = new Intent(this, MainActivity.class); // Leva para MainActivity ao clicar
+    // Método para ATUALIZAR a notificação do foreground service
+    private void updateNotification(String text, int progress) {
+        Notification notification = buildNotification(text, progress); // Call renamed buildNotification
+        if (notificationManager != null) {
+            notificationManager.notify(NOTIFICATION_ID_FOREGROUND, notification);
+        }
+    }
+
+    // Método para CONSTRUIR notificações (usado por startForeground e updateNotification)
+    private Notification buildNotification(String text, int progress) { // Renamed from createNotification
+        Intent notificationIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("LdCloud Upload")
                 .setContentText(text)
-                .setSmallIcon(R.drawable.ic_upload_fab) // Usar um ícone de upload do projeto
+                .setSmallIcon(R.drawable.ic_upload_fab)
                 .setContentIntent(pendingIntent)
-                .setOnlyAlertOnce(true) // Não alertar repetidamente para atualizações de progresso
-                .setOngoing(true); // Importante para foreground service
+                .setOnlyAlertOnce(true)
+                .setOngoing(true);
 
-            // Modificado para remover a barra de progresso se progress < 0
             if (progress >= 0) {
-                builder.setProgress(100, progress, progress == 0); // true para indeterminado se progresso for 0
+                builder.setProgress(100, progress, progress == 0);
             } else {
-                builder.setProgress(0,0,false); // Remove a barra para progresso negativo (erro)
+                builder.setProgress(0,0,false);
         }
         return builder.build();
     }

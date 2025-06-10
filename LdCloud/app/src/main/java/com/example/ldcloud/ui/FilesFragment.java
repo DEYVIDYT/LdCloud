@@ -1,8 +1,14 @@
 package com.example.ldcloud.ui;
 
+import android.app.Activity; // Para Activity.RESULT_OK em onActivityResult
 import android.content.Context;
+import android.content.Intent; // Adicionado
 import android.content.SharedPreferences;
+import android.database.Cursor; // Para getFileNameFromUri e getFileSizeFromUri
+import android.net.Uri; // Adicionado
+import android.os.Build; // Adicionado
 import android.os.Bundle;
+import android.provider.OpenableColumns; // Para getFileNameFromUri e getFileSizeFromUri
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -12,11 +18,12 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText; // For AlertDialog input
+import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog; // For folder name input dialog
+// androidx.annotation.Nullable; // Adicionado, mas já presente em androidx.annotation.NonNull e Nullable
+import androidx.appcompat.app.AlertDialog;
 import com.example.ldcloud.R;
 import com.example.ldcloud.utils.ArchiveFile;
 import com.example.ldcloud.utils.InternetArchiveService;
