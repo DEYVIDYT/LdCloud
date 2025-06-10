@@ -30,15 +30,23 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
 
     private static final String TAG = "FilesFragment";
     private static final String SHARED_PREFS_NAME = "LdCloudSettings";
-    private static final String KEY_ITEM_TITLE = "itemTitle"; // From SettingsFragment
+    // IA S3 Bucket (Item Title)
+    private static final String KEY_IA_ITEM_TITLE = "itemTitle";
+    // GitHub Root JSON Path
+    private static final String KEY_ROOT_JSON_PATH = "root_json_path";
+    private static final String DEFAULT_ROOT_JSON_PATH = "ldcloud_root.json";
 
     private RecyclerView recyclerViewFiles;
     private ArchiveFileAdapter archiveFileAdapter;
     private ProgressBar progressBarLoadingFiles;
     private TextView textViewNoFiles;
-    private FloatingActionButton fabCreateFolder; // FAB for creating folder
+    private FloatingActionButton fabCreateFolder;
     private InternetArchiveService internetArchiveService;
     private SharedPreferences sharedPreferences;
+
+    private String currentJsonPath;
+    private String rootJsonPath;
+    private String iaItemTitle; // For S3 operations like creating folder markers
 
     public FilesFragment() {
         // Required empty public constructor
@@ -49,7 +57,8 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
         super.onCreate(savedInstanceState);
         if (getContext() != null) {
             internetArchiveService = new InternetArchiveService(getContext());
-            sharedPreferences = getContext().getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE);
+            // SharedPreferences initialized here, but values loaded in onViewCreated or onResume
+            // to ensure fragment is attached to activity for requireActivity().
         }
     }
 
@@ -75,44 +84,46 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
 
         fabCreateFolder.setOnClickListener(v -> showCreateFolderDialog());
 
-        loadFiles();
+        // Initialize SharedPreferences here as requireActivity() is safe
+        if (getActivity() != null) {
+            sharedPreferences = requireActivity().getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE);
+            rootJsonPath = sharedPreferences.getString(KEY_ROOT_JSON_PATH, DEFAULT_ROOT_JSON_PATH);
+            iaItemTitle = sharedPreferences.getString(KEY_IA_ITEM_TITLE, ""); // IA S3 Bucket name
+            currentJsonPath = rootJsonPath; // Start at the root
+            loadFiles(currentJsonPath);
+        } else {
+            Log.e(TAG, "Activity is null in onViewCreated, cannot initialize SharedPreferences or load files.");
+            // Display an error or handle appropriately
+            textViewNoFiles.setText("Error initializing settings.");
+            textViewNoFiles.setVisibility(View.VISIBLE);
+            progressBarLoadingFiles.setVisibility(View.GONE);
+            recyclerViewFiles.setVisibility(View.GONE);
+        }
     }
 
-    private void loadFiles() {
-        if (internetArchiveService == null || sharedPreferences == null || getContext() == null) {
-            Log.e(TAG, "Service or SharedPreferences not initialized for loadFiles.");
+    // Step 3: Modify loadFiles()
+    private void loadFiles(String jsonPathToLoad) {
+        if (internetArchiveService == null || getContext() == null) {
+            Log.e(TAG, "Service or Context not available for loadFiles.");
             if (getContext() != null) {
-                Toast.makeText(getContext(), "Error: Service not available for loading files.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Error: Service not available.", Toast.LENGTH_SHORT).show();
             }
+            textViewNoFiles.setText("Error: Service not available.");
             textViewNoFiles.setVisibility(View.VISIBLE);
             recyclerViewFiles.setVisibility(View.GONE);
             progressBarLoadingFiles.setVisibility(View.GONE);
             return;
         }
 
-        String itemTitle = sharedPreferences.getString(KEY_ITEM_TITLE, null);
+        this.currentJsonPath = jsonPathToLoad; // Update current path
+        Log.i(TAG, "Loading files from: " + this.currentJsonPath);
 
-        if (itemTitle == null || itemTitle.isEmpty()) {
-            Log.w(TAG, "Item Title not found in SharedPreferences.");
-            Toast.makeText(getContext(), "Item Title not set in Settings.", Toast.LENGTH_LONG).show();
-            textViewNoFiles.setText("Item Title not set in Settings for loading files.");
-            textViewNoFiles.setVisibility(View.VISIBLE);
-            recyclerViewFiles.setVisibility(View.GONE);
-            progressBarLoadingFiles.setVisibility(View.GONE);
-            return;
-        }
-
-        // Show loading indicator
         progressBarLoadingFiles.setVisibility(View.VISIBLE);
         recyclerViewFiles.setVisibility(View.GONE);
         textViewNoFiles.setVisibility(View.GONE);
 
-        // Perform network operation on a background thread
-        // For simplicity in this environment, I'm calling it directly.
-        // In a real Android app, use AsyncTask, Coroutines, or ExecutorService.
         new Thread(() -> {
-            // Pass null or "" for currentPath to list root directory
-            List<ArchiveFile> files = internetArchiveService.listFilesAndFolders(itemTitle, null);
+            List<ArchiveFile> files = internetArchiveService.loadFilesAndFolders(jsonPathToLoad);
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     progressBarLoadingFiles.setVisibility(View.GONE);
@@ -203,24 +214,63 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
     }
 
     private void createNewFolder(String folderName) {
-        if (internetArchiveService == null || sharedPreferences == null || getContext() == null) {
-            Toast.makeText(getContext(), "Error: Service not available.", Toast.LENGTH_SHORT).show();
+        if (internetArchiveService == null || sharedPreferences == null || getContext() == null || currentJsonPath == null || iaItemTitle == null) {
+            Toast.makeText(getContext(), "Error: Service, settings, or current path not available.", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "createNewFolder: Prerequisites not met. internetArchiveService=" + internetArchiveService +
+                               ", sharedPreferences=" + sharedPreferences +
+                               ", currentJsonPath=" + currentJsonPath +
+                               ", iaItemTitle=" + iaItemTitle);
             return;
         }
-        String itemTitle = sharedPreferences.getString(KEY_ITEM_TITLE, null);
-        if (itemTitle == null || itemTitle.isEmpty()) {
-            Toast.makeText(getContext(), "Item Title not set in Settings.", Toast.LENGTH_LONG).show();
-            return;
+        // iaItemTitle is already loaded in onViewCreated from KEY_IA_ITEM_TITLE
+
+        // Simplified newDirJsonFileName logic: place it "flat" in the repo but with a name that indicates path
+        // e.g., if currentJsonPath is "root/subdir.json" and folderName is "newfolder",
+        // newDirJsonFileName could be "root_subdir_newfolder.json"
+        // A more robust solution would store these in actual GitHub subdirectories.
+        String safeFolderName = folderName.replaceAll("[^a-zA-Z0-9-_]", "");
+        String baseName = currentJsonPath.substring(0, currentJsonPath.lastIndexOf('.'));
+        if(baseName.contains("/")) { // If it's a path, replace slashes for the filename part
+            baseName = baseName.replace("/", "_");
         }
+        String newDirJsonFileName = baseName + "_" + safeFolderName + ".json";
+
+        // For S3, the folder path should reflect the visual hierarchy
+        String s3FolderPath = ""; // Assume root for now if currentJsonPath is root.json
+        if (!currentJsonPath.equals(rootJsonPath)) {
+            // Attempt to derive S3 path from JSON path structure
+            // This logic assumes jsonPath reflects S3 path structure, which needs careful design
+            String parentPath = currentJsonPath.substring(0, currentJsonPath.lastIndexOf('/') > 0 ? currentJsonPath.lastIndexOf('/') : currentJsonPath.length());
+             if(parentPath.endsWith(".json")) parentPath = parentPath.substring(0, parentPath.lastIndexOf('.')); // remove .json
+            parentPath = parentPath.replace(rootJsonPath.substring(0, rootJsonPath.lastIndexOf('.')), ""); // remove root part
+            if(parentPath.startsWith("_")) parentPath = parentPath.substring(1); // remove leading _ if root_
+            parentPath = parentPath.replace("_", "/"); // replace internal _ with /
+            if(!parentPath.isEmpty() && !parentPath.endsWith("/")) parentPath += "/";
+            s3FolderPath = parentPath;
+        }
+        s3FolderPath += folderName + "/";
+
+
+        Log.d(TAG, "Creating folder: " + folderName +
+                   ", parentJsonPath: " + currentJsonPath +
+                   ", newDirJsonFileName: " + newDirJsonFileName +
+                   ", iaItemTitle: " + iaItemTitle +
+                   ", s3FolderPath: " + s3FolderPath);
 
         Toast.makeText(getContext(), "Creating folder '" + folderName + "'...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            boolean success = internetArchiveService.createFolder(itemTitle, folderName);
+            boolean success = internetArchiveService.createDirectoryAndIndex(
+                    folderName,
+                    currentJsonPath,
+                    newDirJsonFileName,
+                    iaItemTitle, // IA S3 bucket name
+                    s3FolderPath // S3 "folder" key
+            );
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     if (success) {
                         Toast.makeText(getContext(), "Folder '" + folderName + "' created.", Toast.LENGTH_LONG).show();
-                        loadFiles(); // Refresh file list
+                        loadFiles(currentJsonPath); // Refresh current directory
                     } else {
                         Toast.makeText(getContext(), "Failed to create folder '" + folderName + "'.", Toast.LENGTH_LONG).show();
                     }
@@ -228,4 +278,17 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
             }
         }).start();
     }
-}
+
+    @Override
+    public void onDirectoryClicked(ArchiveFile directory) {
+        if (directory.jsonPath != null && !directory.jsonPath.isEmpty()) {
+            Log.d(TAG, "Directory clicked: " + directory.getName() + ", loading path: " + directory.jsonPath);
+            loadFiles(directory.jsonPath); // Carrega o conteúdo da subpasta
+        } else {
+            Toast.makeText(getContext(), "Caminho JSON para o diretório não definido.", Toast.LENGTH_SHORT).show();
+            Log.w(TAG, "Directory clicked but jsonPath is null or empty for: " + directory.getName());
+        }
+    }
+
+    private void showCreateFolderDialog() {
+        if (getContext() == null) return;

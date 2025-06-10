@@ -56,6 +56,62 @@
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- GitHub Settings Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Configurações do GitHub (AVISO: Armazenar o token aqui é inseguro!)"
+            style="?attr/textAppearanceTitleMedium"
+            android:textColor="?attr/colorError"
+            android:layout_marginTop="32dp"
+            android:layout_marginBottom="8dp"/>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/text_input_layout_github_repo"
+            style="?attr/textInputStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Usuário/Repositório GitHub">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_text_github_repo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/text_input_layout_github_token"
+            style="?attr/textInputStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:hint="Token de Acesso Pessoal do GitHub">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_text_github_token"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/text_input_layout_root_json_path"
+            style="?attr/textInputStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:hint="Caminho para o JSON raiz (ex: root.json)">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_text_root_json_path"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/button_save_settings"
             style="?attr/materialButtonStyle"

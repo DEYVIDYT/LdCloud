@@ -31,14 +31,19 @@ public class UploadsFragment extends Fragment {
 
     private static final String TAG = "UploadsFragment";
     private static final String SHARED_PREFS_NAME = "LdCloudSettings";
-    private static final String KEY_ITEM_TITLE = "itemTitle";
-    // Access Key and Secret Key are not directly used in fragment but by the service
-    // private static final String KEY_ACCESS_KEY = "accessKey";
-    // private static final String KEY_SECRET_KEY = "secretKey";
+    // IA S3 Bucket (Item Title)
+    private static final String KEY_IA_ITEM_TITLE = "itemTitle";
+    // GitHub Root JSON Path (used as default parent for uploads in this simplified version)
+    private static final String KEY_ROOT_JSON_PATH = "root_json_path";
+    private static final String DEFAULT_ROOT_JSON_PATH = "ldcloud_root.json";
+
 
     private FloatingActionButton fabUploadFile;
     private InternetArchiveService internetArchiveService;
     private SharedPreferences sharedPreferences;
+
+    private String parentJsonPathForUpload;
+    private String iaItemTitleForUpload;
 
     private ActivityResultLauncher<Intent> filePickerLauncher;
 
@@ -50,8 +55,25 @@ public class UploadsFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (getContext() != null) {
-            internetArchiveService = new InternetArchiveService(getContext());
-            sharedPreferences = getContext().getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE);
+            internetArchiveService = new InternetArchiveService(requireContext());
+            sharedPreferences = requireContext().getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE);
+
+            // Load paths needed for upload operation
+            // For this subtask, uploads always go to the directory specified by root_json_path.
+            // A more complex implementation would get currentJsonPath from FilesFragment.
+            parentJsonPathForUpload = sharedPreferences.getString(KEY_ROOT_JSON_PATH, DEFAULT_ROOT_JSON_PATH);
+            iaItemTitleForUpload = sharedPreferences.getString(KEY_IA_ITEM_TITLE, "");
+
+            if (iaItemTitleForUpload.isEmpty()) {
+                Log.e(TAG, "IA Item Title (S3 Bucket) is not configured.");
+                // Consider disabling upload FAB if critical info is missing, or show persistent error on UI
+            }
+             if (parentJsonPathForUpload.isEmpty() && DEFAULT_ROOT_JSON_PATH.equals(sharedPreferences.getString(KEY_ROOT_JSON_PATH, DEFAULT_ROOT_JSON_PATH))) {
+                Log.w(TAG, "Root JSON path is the default and might not exist yet. Uploads will attempt to use/create it.");
+            }
+
+        } else {
+            Log.e(TAG, "Context is null during onCreate, cannot initialize services.");
         }
 
         filePickerLauncher = registerForActivityResult(
@@ -101,13 +123,19 @@ public class UploadsFragment extends Fragment {
     }
 
     private void handleSelectedFile(Uri uri) {
-        if (getContext() == null) {
-            Log.e(TAG, "Context is null in handleSelectedFile");
+        if (getContext() == null || internetArchiveService == null) {
+            Log.e(TAG, "Context or InternetArchiveService is null in handleSelectedFile.");
+            Toast.makeText(getContext(), "Error: Service not available.", Toast.LENGTH_SHORT).show();
             return;
         }
-        String itemTitle = sharedPreferences.getString(KEY_ITEM_TITLE, null);
-        if (itemTitle == null || itemTitle.isEmpty()) {
-            Toast.makeText(getContext(), "Item Title not set in Settings.", Toast.LENGTH_LONG).show();
+        // iaItemTitleForUpload and parentJsonPathForUpload are now loaded in onCreate
+
+        if (iaItemTitleForUpload == null || iaItemTitleForUpload.isEmpty()) {
+            Toast.makeText(getContext(), "IA Item Title (S3 Bucket) not set in Settings.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (parentJsonPathForUpload == null || parentJsonPathForUpload.isEmpty()){
+            Toast.makeText(getContext(), "Parent JSON path for GitHub not configured.", Toast.LENGTH_LONG).show();
             return;
         }
 

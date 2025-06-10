@@ -36,12 +36,18 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
         holder.fileName.setText(file.getName());
 
         String details;
+        String details;
         if (file.isDirectory()) {
-            holder.fileIcon.setImageResource(R.drawable.ic_vector_folder); // Use new vector drawable
+            holder.fileIcon.setImageResource(R.drawable.ic_vector_folder);
             details = "Folder | Modified: " + file.getLastModifiedDate();
-            holder.downloadButton.setVisibility(View.GONE); // Hide download for directories
+            holder.downloadButton.setVisibility(View.GONE);
+            holder.itemView.setOnClickListener(v -> { // Click listener for the whole item
+                if (callbacks != null) {
+                    callbacks.onDirectoryClicked(file);
+                }
+            });
         } else {
-            holder.fileIcon.setImageResource(android.R.drawable.ic_menu_gallery); // Placeholder file icon
+            holder.fileIcon.setImageResource(android.R.drawable.ic_menu_gallery);
             details = "Size: " + file.getSize() + " bytes | Modified: " + file.getLastModifiedDate();
             holder.downloadButton.setVisibility(View.VISIBLE);
             holder.downloadButton.setOnClickListener(v -> {
@@ -49,6 +55,8 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
                     callbacks.onDownloadRequested(file);
                 }
             });
+            holder.itemView.setOnClickListener(null); // No special action for clicking file item itself (only download button)
+            holder.itemView.setClickable(false);
         }
         holder.fileDetails.setText(details);
     }

@@ -37,11 +37,13 @@ public class InternetArchiveService {
 
     private String accessKey;
     private String secretKey;
-    private boolean credentialsLoaded = false;
+    private boolean credentialsLoaded = false; // Primarily for S3 credentials now
     private AmazonS3Client s3Client;
+    private GitHubService gitHubService; // New field for GitHubService
 
     public InternetArchiveService(Context context) {
         SharedPreferences sharedPreferences = context.getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE);
+        // Load IA S3 Credentials
         this.accessKey = sharedPreferences.getString(KEY_ACCESS_KEY, null);
         this.secretKey = sharedPreferences.getString(KEY_SECRET_KEY, null);
 
@@ -51,145 +53,320 @@ public class InternetArchiveService {
                 this.s3Client = new AmazonS3Client(credentials);
                 this.s3Client.setRegion(Region.getRegion(Regions.US_EAST_1));
                 this.s3Client.setEndpoint("s3.us.archive.org");
-                this.credentialsLoaded = true;
+                this.credentialsLoaded = true; // S3 credentials loaded
                 Log.i(TAG, "AmazonS3Client initialized successfully.");
             } catch (Exception e) {
                 Log.e(TAG, "Error initializing AmazonS3Client: " + e.getMessage(), e);
                 this.s3Client = null;
-                this.credentialsLoaded = false;
+                this.credentialsLoaded = false; // S3 credentials failed to load
             }
         } else {
             this.credentialsLoaded = false;
-            Log.w(TAG, "Credentials not found or incomplete. S3 client not initialized.");
+            Log.w(TAG, "IA S3 Credentials not found or incomplete. S3 client not initialized.");
         }
+
+        // Initialize GitHubService
+        this.gitHubService = new GitHubService(context);
+        // Note: GitHubService loads its own credentials internally from SharedPreferences.
+        // We might want a way to check if GitHub credentials are also loaded successfully if needed for combined status.
     }
 
     public boolean areCredentialsLoaded() {
+        // This now primarily reflects S3 credential status.
+        // GitHubService has its own internal credential loading, might need a separate check if required.
         return credentialsLoaded;
     }
 
     /**
-     * Tests the S3 connection and credentials by attempting to list the first object in the bucket.
+     * Tests S3 connection and GitHub connection (by trying to fetch the root JSON).
      *
-     * @param itemTitleAsBucketName The identifier of the item (bucket) on Internet Archive.
-     * @return true if the connection and credentials seem valid, false otherwise.
+     * @param itemTitleAsBucketName The IA S3 bucket name.
+     * @param rootJsonPath The path to the root JSON file on GitHub.
+     * @return true if both connections are successful, false otherwise.
      */
-    public boolean testConnection(String itemTitleAsBucketName) {
+    public boolean testConnection(String itemTitleAsBucketName, String rootJsonPath) {
+        boolean s3Ok = false;
         if (!credentialsLoaded || s3Client == null) {
-            Log.e(TAG, "testConnection: Credentials are not loaded or S3 client not initialized.");
+            Log.e(TAG, "testConnection: IA S3 Credentials are not loaded or S3 client not initialized.");
+        } else if (itemTitleAsBucketName == null || itemTitleAsBucketName.isEmpty()) {
+            Log.e(TAG, "testConnection: Item title (S3 bucket name) is null or empty.");
+        } else {
+            try {
+                Log.i(TAG, "Attempting S3 connection test for bucket: " + itemTitleAsBucketName);
+                s3Client.listObjectsV2(new ListObjectsV2Request().withBucketName(itemTitleAsBucketName).withMaxKeys(1));
+                Log.i(TAG, "S3 connection test successful for bucket: " + itemTitleAsBucketName);
+                s3Ok = true;
+            } catch (Exception e) {
+                Log.e(TAG, "Caught exception type during S3 testConnection: " + e.getClass().getName());
+                Log.e(TAG, "S3 Connection Test Failed: " + e.getMessage(), e);
+            }
+        }
+
+        boolean githubOk = false;
+        if (gitHubService == null) {
+            Log.e(TAG, "testConnection: GitHubService is not initialized.");
+        } else if (rootJsonPath == null || rootJsonPath.isEmpty()) {
+            Log.e(TAG, "testConnection: Root JSON path for GitHub is null or empty.");
+        } else {
+            try {
+                Log.i(TAG, "Attempting GitHub connection test by fetching root JSON: " + rootJsonPath);
+                JSONObject rootJson = gitHubService.getJsonFileContent(rootJsonPath);
+                if (rootJson != null) {
+                    Log.i(TAG, "GitHub connection test successful (fetched root JSON).");
+                    githubOk = true;
+                } else {
+                    Log.w(TAG, "GitHub connection test failed: root JSON was null (file not found or other error).");
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Caught IOException during GitHub testConnection: " + e.getClass().getName());
+                Log.e(TAG, "GitHub Connection Test Failed: " + e.getMessage(), e);
+            }
+        }
+        return s3Ok && githubOk;
+    }
+
+    /**
+     * Loads file and folder listings from a JSON file specified by jsonPath, using GitHubService.
+     * This method replaces the direct S3 listing.
+     *
+     * @param jsonPath The path to the JSON file on GitHub that describes the directory content.
+     * @return A list of ArchiveFile objects.
+     */
+    public List<ArchiveFile> loadFilesAndFolders(String jsonPath) {
+        List<ArchiveFile> archiveFiles = new ArrayList<>();
+        if (gitHubService == null) {
+            Log.e(TAG, "GitHubService not initialized in loadFilesAndFolders.");
+            return archiveFiles;
+        }
+        if (jsonPath == null || jsonPath.isEmpty()) {
+            Log.e(TAG, "JSON path cannot be null or empty in loadFilesAndFolders.");
+            return archiveFiles;
+        }
+
+        try {
+            Log.d(TAG, "Loading directory structure from GitHub JSON: " + jsonPath);
+            JSONObject jsonDirectory = gitHubService.getJsonFileContent(jsonPath);
+            if (jsonDirectory == null) {
+                Log.e(TAG, "Directory JSON not found or error fetching from GitHub: " + jsonPath);
+                // Consider creating an empty directory JSON here if it's a new/empty directory.
+                // For now, just returning empty.
+                return archiveFiles;
+            }
+
+            org.json.JSONArray entries = jsonDirectory.optJSONArray("entries");
+            if (entries != null) {
+                for (int i = 0; i < entries.length(); i++) {
+                    JSONObject entry = entries.getJSONObject(i);
+                    String name = entry.getString("name");
+                    String type = entry.getString("type");
+                    boolean isDirectory = "directory".equalsIgnoreCase(type);
+
+                    String iaS3Key = entry.optString("ia_s3_key", null);
+                    String entryJsonPath = entry.optString("json_path", null);
+                    String size = entry.optString("size", isDirectory ? "DIR" : "0");
+                    String lastModified = entry.optString("last_modified", "N/A");
+
+                    archiveFiles.add(new ArchiveFile(name, isDirectory, size, lastModified, iaS3Key, entryJsonPath));
+                }
+            }
+             Log.i(TAG, "Successfully loaded " + archiveFiles.size() + " entries from: " + jsonPath);
+        } catch (IOException e) {
+            Log.e(TAG, "IOException while loading files/folders from GitHub JSON: " + jsonPath, e);
+        } catch (org.json.JSONException e) {
+            Log.e(TAG, "JSONException while parsing GitHub JSON: " + jsonPath, e);
+        }
+        return archiveFiles;
+    }
+
+    /**
+     * Uploads a file to IA S3 and then updates the GitHub JSON index.
+     * @param localFilePath Path to the local file to upload.
+     * @param targetS3Key The desired S3 key for the file in the IA bucket.
+     * @param parentJsonPath Path to the parent directory's JSON file on GitHub.
+     * @param itemTitleAsBucketName The IA S3 bucket name.
+     * @return true if both S3 upload and GitHub index update are successful.
+     */
+    public boolean uploadFileAndIndex(String localFilePath, String targetS3Key, String parentJsonPath, String itemTitleAsBucketName) {
+        // 1. Upload to Internet Archive S3
+        Log.d(TAG, "uploadFileAndIndex: Starting S3 upload for " + localFilePath + " to " + itemTitleAsBucketName + "/" + targetS3Key);
+        boolean s3UploadSuccess = uploadFile(itemTitleAsBucketName, localFilePath, targetS3Key);
+
+        if (!s3UploadSuccess) {
+            Log.e(TAG, "uploadFileAndIndex: S3 upload failed for " + targetS3Key);
             return false;
         }
-        if (itemTitleAsBucketName == null || itemTitleAsBucketName.isEmpty()) {
-            Log.e(TAG, "testConnection: Item title (bucket name) is null or empty.");
+        Log.i(TAG, "uploadFileAndIndex: S3 upload successful for " + targetS3Key);
+
+        // 2. Update GitHub JSON index
+        if (gitHubService == null) {
+            Log.e(TAG, "uploadFileAndIndex: GitHubService not initialized.");
+            return false; // Or handle this state more gracefully
+        }
+         if (parentJsonPath == null || parentJsonPath.isEmpty()) {
+            Log.e(TAG, "uploadFileAndIndex: parentJsonPath is null or empty. Cannot update index.");
             return false;
         }
 
         try {
-            Log.i(TAG, "Attempting S3 connection test for bucket: " + itemTitleAsBucketName);
-            s3Client.listObjectsV2(new ListObjectsV2Request().withBucketName(itemTitleAsBucketName).withMaxKeys(1));
-            Log.i(TAG, "S3 connection test successful for bucket: " + itemTitleAsBucketName);
-            return true;
-        } catch (Exception e) {
-            Log.e(TAG, "Caught exception type: " + e.getClass().getName());
-            Log.e(TAG, "S3 Connection Test Failed: " + e.getMessage(), e);
+            JSONObject parentJson = gitHubService.getJsonFileContent(parentJsonPath);
+            if (parentJson == null) {
+                // If parent JSON doesn't exist, create a new one
+                Log.w(TAG, "uploadFileAndIndex: Parent JSON '" + parentJsonPath + "' not found. Creating new one.");
+                parentJson = new JSONObject();
+                parentJson.put("entries", new org.json.JSONArray());
+            }
+
+            org.json.JSONArray entries = parentJson.optJSONArray("entries");
+            if (entries == null) {
+                entries = new org.json.JSONArray();
+                parentJson.put("entries", entries);
+            }
+
+            // Create new entry for the uploaded file
+            java.io.File uploadedFile = new java.io.File(localFilePath);
+            JSONObject newEntry = new JSONObject();
+            newEntry.put("name", uploadedFile.getName());
+            newEntry.put("type", "file");
+            newEntry.put("ia_s3_key", targetS3Key);
+            newEntry.put("size", String.valueOf(uploadedFile.length()));
+            newEntry.put("last_modified", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date(uploadedFile.lastModified())));
+            // jsonPath for a file is null
+
+            // Check if entry already exists, update if so, otherwise add
+            boolean entryUpdated = false;
+            for (int i = 0; i < entries.length(); i++) {
+                JSONObject currentEntry = entries.getJSONObject(i);
+                if (uploadedFile.getName().equals(currentEntry.optString("name")) && "file".equals(currentEntry.optString("type"))) {
+                    entries.put(i, newEntry); // Replace existing entry
+                    entryUpdated = true;
+                    break;
+                }
+            }
+            if (!entryUpdated) {
+                entries.put(newEntry);
+            }
+
+            String commitMessage = "Added/Updated file: " + uploadedFile.getName();
+            boolean githubUpdateSuccess = gitHubService.updateJsonFile(parentJsonPath, parentJson, commitMessage);
+
+            if (!githubUpdateSuccess) {
+                Log.e(TAG, "uploadFileAndIndex: Failed to update GitHub JSON index at " + parentJsonPath);
+                // Consider S3 cleanup or a retry mechanism here if critical
+            } else {
+                Log.i(TAG, "uploadFileAndIndex: GitHub JSON index updated successfully at " + parentJsonPath);
+            }
+            return githubUpdateSuccess;
+
+        } catch (IOException e) {
+            Log.e(TAG, "uploadFileAndIndex: IOException during GitHub JSON update: " + e.getMessage(), e);
+        } catch (org.json.JSONException e) {
+            Log.e(TAG, "uploadFileAndIndex: JSONException during GitHub JSON update: " + e.getMessage(), e);
         }
         return false;
     }
 
     /**
-     * Lists files and folders within a given Internet Archive item using S3.
-     * This version supports listing contents of a specific path (prefix) within the bucket.
-     *
-     * @param itemTitleAsBucketName The identifier of the item (S3 bucket).
-     * @param currentPath           The current path (prefix) within the bucket to list. Use "" or null for root.
-     * @return A list of ArchiveFile objects, or an empty list if an error occurs or no files.
+     * Creates a new directory:
+     * 1. Creates an empty JSON file on GitHub to represent the directory's index.
+     * 2. Adds an entry for this new directory to its parent's JSON index file on GitHub.
+     * 3. (Optional) Creates a corresponding placeholder "folder" object in IA S3.
+     * @param newDirName Name for the new directory.
+     * @param parentJsonPath Path to the parent directory's JSON index on GitHub.
+     * @param newDirJsonFileName Full path (including name) for the new directory's JSON index file on GitHub.
+     * @param itemTitleAsBucketName IA S3 bucket name (for optional S3 folder marker).
+     * @param s3FolderPath Full S3 key for the optional IA S3 folder marker (e.g., "path/to/newDirName/").
+     * @return true if the directory index was successfully created on GitHub.
      */
-    public List<ArchiveFile> listFilesAndFolders(String itemTitleAsBucketName, String currentPath) {
-        List<ArchiveFile> archiveFiles = new ArrayList<>();
-        if (!credentialsLoaded || s3Client == null) {
-            Log.w(TAG, "listFilesAndFolders: Credentials not loaded or S3 client not initialized for bucket: " + itemTitleAsBucketName);
-            return archiveFiles;
+    public boolean createDirectoryAndIndex(String newDirName, String parentJsonPath, String newDirJsonFileName, String itemTitleAsBucketName, String s3FolderPath) {
+        if (gitHubService == null) {
+            Log.e(TAG, "createDirectoryAndIndex: GitHubService not initialized.");
+            return false;
         }
-
-        if (itemTitleAsBucketName == null || itemTitleAsBucketName.isEmpty()) {
-            Log.e(TAG, "listFilesAndFolders: Item title (bucket name) is null or empty.");
-            return archiveFiles;
+        if (newDirName == null || newDirName.isEmpty() || parentJsonPath == null || parentJsonPath.isEmpty() || newDirJsonFileName == null || newDirJsonFileName.isEmpty()) {
+            Log.e(TAG, "createDirectoryAndIndex: Directory name, parent JSON path, or new directory JSON filename is null or empty.");
+            return false;
         }
-
-        String prefix = (currentPath == null || currentPath.isEmpty()) ? "" : (currentPath.endsWith("/") ? currentPath : currentPath + "/");
 
         try {
-            Log.i(TAG, "Listing S3 objects for bucket: " + itemTitleAsBucketName + ", Prefix: '" + prefix + "'");
-            ListObjectsV2Request request = new ListObjectsV2Request()
-                    .withBucketName(itemTitleAsBucketName)
-                    .withPrefix(prefix)
-                    .withDelimiter("/");
+            // 1. Create the JSON file for the new directory (e.g., "newDirName.json" or "path/newDirName/index.json")
+            JSONObject newDirJson = new JSONObject();
+            newDirJson.put("entries", new org.json.JSONArray()); // New directory is empty
 
-            ListObjectsV2Result result;
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+            boolean newDirJsonCreated = gitHubService.updateJsonFile(newDirJsonFileName, newDirJson, "Created directory structure for " + newDirName);
+            if (!newDirJsonCreated) {
+                Log.e(TAG, "createDirectoryAndIndex: Failed to create new directory JSON file on GitHub: " + newDirJsonFileName);
+                return false;
+            }
+            Log.i(TAG, "createDirectoryAndIndex: New directory JSON created on GitHub: " + newDirJsonFileName);
 
-            do {
-                result = s3Client.listObjectsV2(request);
+            // 2. Update the parent directory's JSON to include an entry for the new directory
+            JSONObject parentJson = gitHubService.getJsonFileContent(parentJsonPath);
+            if (parentJson == null) {
+                // If parent JSON doesn't exist, create it. This might happen for the root.
+                Log.w(TAG, "createDirectoryAndIndex: Parent JSON '" + parentJsonPath + "' not found. Creating new one.");
+                parentJson = new JSONObject();
+                parentJson.put("entries", new org.json.JSONArray());
+            }
 
-                if (result.getCommonPrefixes() != null) {
-                    for (String commonPrefix : result.getCommonPrefixes()) {
-                        if (commonPrefix.equals(prefix)) continue;
-                        String folderName = commonPrefix.substring(prefix.length());
-                        if (folderName.endsWith("/")) {
-                            folderName = folderName.substring(0, folderName.length() - 1);
-                        }
-                        if (folderName.isEmpty()) continue;
-                        archiveFiles.add(new ArchiveFile(folderName, true, "DIR", "N/A"));
-                        Log.d(TAG, "S3 CommonPrefix (Folder): " + folderName);
-                    }
+            org.json.JSONArray parentEntries = parentJson.optJSONArray("entries");
+            if (parentEntries == null) {
+                parentEntries = new org.json.JSONArray();
+                parentJson.put("entries", parentEntries);
+            }
+
+            JSONObject newDirEntry = new JSONObject();
+            newDirEntry.put("name", newDirName);
+            newDirEntry.put("type", "directory");
+            newDirEntry.put("json_path", newDirJsonFileName); // Path to the new directory's own JSON index
+            newDirEntry.put("last_modified", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()));
+            // ia_s3_key and size are not typically relevant for a directory entry itself that points to another JSON
+
+            // Check if entry already exists, update if so (though less likely for dirs), otherwise add
+            boolean entryUpdatedOrAdded = false;
+            for (int i = 0; i < parentEntries.length(); i++) {
+                JSONObject currentEntry = parentEntries.getJSONObject(i);
+                if (newDirName.equals(currentEntry.optString("name")) && "directory".equals(currentEntry.optString("type"))) {
+                    parentEntries.put(i, newDirEntry);
+                    entryUpdatedOrAdded = true;
+                    break;
                 }
+            }
+            if (!entryUpdatedOrAdded) {
+                parentEntries.put(newDirEntry);
+            }
 
-                if (result.getObjectSummaries() != null) {
-                    for (S3ObjectSummary summary : result.getObjectSummaries()) {
-                        String key = summary.getKey();
-                        if (key.equals(prefix)) continue;
+            boolean parentJsonUpdated = gitHubService.updateJsonFile(parentJsonPath, parentJson, "Added subdirectory: " + newDirName);
+            if (!parentJsonUpdated) {
+                Log.e(TAG, "createDirectoryAndIndex: Failed to update parent JSON (" + parentJsonPath + ") with new directory entry.");
+                // Here, we might have a partial success (new dir JSON created, but parent not updated).
+                // For simplicity, returning false. A more robust solution might try to delete newDirJsonFileName.
+                return false;
+            }
+            Log.i(TAG, "createDirectoryAndIndex: Parent JSON updated successfully with new directory: " + newDirName);
 
-                        String name = key.substring(prefix.length());
-                        if (name.isEmpty() || name.equals("/")) continue;
-
-                        boolean isDirectory = key.endsWith("/");
-
-                        if (isDirectory) {
-                            name = name.substring(0, name.length() - 1);
-                            if (name.isEmpty()) continue;
-
-                            boolean alreadyAdded = false;
-                            for(ArchiveFile af : archiveFiles) {
-                                if(af.isDirectory() && af.getName().equals(name)) {
-                                    alreadyAdded = true;
-                                    break;
-                                }
-                            }
-                            if(alreadyAdded) continue;
-                        }
-
-                        String sizeStr = isDirectory ? "DIR" : String.valueOf(summary.getSize());
-                        String lastModifiedStr = summary.getLastModified() != null ? sdf.format(summary.getLastModified()) : "N/A";
-
-                        archiveFiles.add(new ArchiveFile(name, isDirectory, sizeStr, lastModifiedStr));
-                        Log.d(TAG, "S3 Object (File/ExplicitFolder): " + name + ", IsDir=" + isDirectory + ", Size=" + sizeStr);
-                    }
+            // 3. (Optional) Create S3 folder marker
+            if (itemTitleAsBucketName != null && !itemTitleAsBucketName.isEmpty() && s3FolderPath != null && !s3FolderPath.isEmpty()) {
+                boolean s3FolderCreated = createFolder(itemTitleAsBucketName, s3FolderPath); // Uses the existing S3 createFolder
+                if (!s3FolderCreated) {
+                    Log.w(TAG, "createDirectoryAndIndex: Failed to create S3 folder marker at " + s3FolderPath + " (this is optional).");
+                } else {
+                    Log.i(TAG, "createDirectoryAndIndex: S3 folder marker created at " + s3FolderPath);
                 }
-                request.setContinuationToken(result.getNextContinuationToken());
-            } while (result.isTruncated());
+            }
+            return true; // Main GitHub operations succeeded
 
-            Log.i(TAG, "Successfully listed " + archiveFiles.size() + " S3 objects for bucket: " + itemTitleAsBucketName + ", Path: " + prefix);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Caught exception type: " + e.getClass().getName());
-            Log.e(TAG, "Exception listing S3 objects: " + e.getMessage(), e);
+        } catch (IOException e) {
+            Log.e(TAG, "createDirectoryAndIndex: IOException: " + e.getMessage(), e);
+        } catch (org.json.JSONException e) {
+            Log.e(TAG, "createDirectoryAndIndex: JSONException: " + e.getMessage(), e);
         }
-        return archiveFiles;
+        return false;
     }
 
+    // This is the original S3-only uploadFile, now used internally or for direct S3 uploads without indexing
     public boolean uploadFile(String itemTitleAsBucketName, String localFilePath, String remoteFileNameInItemAsKey) {
         if (!credentialsLoaded || s3Client == null) {
-            Log.e(TAG, "uploadFile: Credentials are not loaded or S3 client not initialized. Cannot upload file.");
+            Log.e(TAG, "uploadFile (S3-only): Credentials are not loaded or S3 client not initialized. Cannot upload file.");
             return false;
         }
         if (itemTitleAsBucketName == null || itemTitleAsBucketName.isEmpty() ||
