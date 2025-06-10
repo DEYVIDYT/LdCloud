@@ -40,7 +40,7 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
     private ArchiveFileAdapter archiveFileAdapter;
     private ProgressBar progressBarLoadingFiles;
     private TextView textViewNoFiles;
-    private FloatingActionButton fabCreateFolder;
+    private FloatingActionButton fabAddAction; // Renamed from fabCreateFolder
     private InternetArchiveService internetArchiveService;
     private SharedPreferences sharedPreferences;
 
@@ -76,13 +76,14 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
         recyclerViewFiles = view.findViewById(R.id.recycler_view_files);
         progressBarLoadingFiles = view.findViewById(R.id.progress_bar_loading_files);
         textViewNoFiles = view.findViewById(R.id.text_view_no_files);
-        fabCreateFolder = view.findViewById(R.id.fab_create_folder);
+        fabAddAction = view.findViewById(R.id.fab_add_action); // Use new ID
 
         recyclerViewFiles.setLayoutManager(new LinearLayoutManager(getContext()));
         archiveFileAdapter = new ArchiveFileAdapter(new ArrayList<>(), this);
         recyclerViewFiles.setAdapter(archiveFileAdapter);
 
-        fabCreateFolder.setOnClickListener(v -> showCreateFolderDialog());
+        // fabAddAction.setImageResource(R.drawable.ic_add); // Or your custom Material icon if available
+        fabAddAction.setOnClickListener(v -> showAddActionDialog()); // Call new dialog
 
         // Initialize SharedPreferences here as requireActivity() is safe
         if (getActivity() != null) {
@@ -296,4 +297,144 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
 
     // The duplicate showCreateFolderDialog() that was here has been removed by the previous diff block.
 
+    private void showAddActionDialog() {
+        if (getContext() == null) { return; }
+        final CharSequence[] items = {"Nova Pasta", "Upload de Arquivo"};
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder = new com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext());
+        builder.setTitle("Escolha uma ação");
+        builder.setItems(items, (dialog, item) -> {
+            if (items[item].equals("Nova Pasta")) {
+                showCreateFolderDialog(); // Existing method
+            } else if (items[item].equals("Upload de Arquivo")) {
+                openFileSelector();
+            }
+        });
+        builder.show();
+    }
+
+    private static final int FILE_SELECTOR_REQUEST_CODE = 123;
+
+    private void openFileSelector() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("*/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            startActivityForResult(Intent.createChooser(intent, "Selecione um arquivo para Upload"), FILE_SELECTOR_REQUEST_CODE);
+        } catch (android.content.ActivityNotFoundException ex) {
+            Toast.makeText(getContext(), "Por favor, instale um Gerenciador de Arquivos.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FILE_SELECTOR_REQUEST_CODE && resultCode == android.app.Activity.RESULT_OK) {
+            if (data != null && data.getData() != null) {
+                Uri fileUri = data.getData();
+                Log.d(TAG, "Arquivo selecionado: " + fileUri.toString());
+                startUploadService(fileUri);
+            } else {
+                Log.w(TAG, "onActivityResult: data ou data.getData() é nulo para FILE_SELECTOR_REQUEST_CODE");
+                Toast.makeText(getContext(), "Não foi possível obter o arquivo selecionado.", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private String getFileNameFromUri(Uri uri) {
+        if (getContext() == null || uri == null) return null;
+        String result = null;
+        if (uri.getScheme() != null && uri.getScheme().equals("content")) {
+            try (android.database.Cursor cursor = getContext().getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex != -1) {
+                        result = cursor.getString(nameIndex);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Erro ao obter nome do arquivo do URI (content scheme): " + uri.toString(), e);
+            }
+        }
+        if (result == null) {
+            result = uri.getPath();
+            if (result != null) {
+                int cut = result.lastIndexOf('/');
+                if (cut != -1) {
+                    result = result.substring(cut + 1);
+                }
+            }
+        }
+        return result != null ? result : "unknown_file_" + System.currentTimeMillis();
+    }
+
+    private long getFileSizeFromUri(Uri uri) {
+        if (getContext() == null || uri == null) return 0;
+        android.database.Cursor cursor = null;
+        try {
+            cursor = getContext().getContentResolver().query(uri, null, null, null, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                int sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE);
+                if (!cursor.isNull(sizeIndex)) {
+                    return cursor.getLong(sizeIndex);
+                } else {
+                     Log.w(TAG, "Coluna de tamanho é nula para URI: " + uri.toString());
+                }
+            } else {
+                 Log.w(TAG, "Cursor nulo ou vazio para URI: " + uri.toString());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Erro ao obter tamanho do arquivo do URI: " + uri.toString(), e);
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+        // Fallback: tentar obter o tamanho do arquivo diretamente se for um File URI (menos comum com ACTION_GET_CONTENT)
+        if ("file".equals(uri.getScheme()) && uri.getPath() != null) {
+            try {
+                java.io.File file = new java.io.File(uri.getPath());
+                if (file.exists()) return file.length();
+            } catch (Exception e) {
+                Log.e(TAG, "Erro ao obter tamanho do arquivo para File URI: " + uri.toString(), e);
+            }
+        }
+        Log.w(TAG, "Não foi possível determinar o tamanho do arquivo para URI: " + uri.toString() + ". Retornando 0.");
+        return 0;
+    }
+
+
+    private void startUploadService(Uri fileUri) {
+        if (getContext() == null) { return; }
+
+        String fileName = getFileNameFromUri(fileUri);
+        long fileSize = getFileSizeFromUri(fileUri);
+
+        if (fileName == null) {
+            Toast.makeText(getContext(), "Não foi possível obter o nome do arquivo.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // iaItemTitle e currentJsonPath já são campos de classe carregados/atualizados
+        if (iaItemTitle == null || iaItemTitle.isEmpty()) {
+            Toast.makeText(getContext(), "Item Title (Bucket S3) do IA não configurado.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (currentJsonPath == null || currentJsonPath.isEmpty()) {
+            Toast.makeText(getContext(), "Caminho do diretório atual (JSON path) não definido.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Intent uploadIntent = new Intent(getContext(), LdUploadService.class);
+        uploadIntent.putExtra(LdUploadService.EXTRA_FILE_URI, fileUri.toString());
+        uploadIntent.putExtra(LdUploadService.EXTRA_TARGET_S3_KEY, fileName);
+        uploadIntent.putExtra(LdUploadService.EXTRA_FILE_SIZE, fileSize);
+        uploadIntent.putExtra(LdUploadService.EXTRA_IA_ITEM_TITLE, iaItemTitle);
+        uploadIntent.putExtra(LdUploadService.EXTRA_PARENT_JSON_PATH, currentJsonPath);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            requireContext().startForegroundService(uploadIntent);
+        } else {
+            requireContext().startService(uploadIntent);
+        }
+        Toast.makeText(getContext(), "Upload de '" + fileName + "' iniciado...", Toast.LENGTH_SHORT).show();
+    }
 }

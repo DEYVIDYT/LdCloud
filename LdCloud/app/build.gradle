@@ -34,6 +34,7 @@ dependencies {
     // implementation 'org.archive:archive-sdk:3.0.3' // REMOVED Internet Archive SDK
     implementation 'com.amazonaws:aws-android-sdk-s3:2.59.0' // AWS S3 SDK
     implementation 'com.amazonaws:aws-android-sdk-core:2.59.0' // AWS Core Runtime
+    implementation 'com.amazonaws:aws-android-sdk-mobile-client:2.59.0' // For TransferUtility & AWSMobileClient
     implementation 'com.squareup.okhttp3:okhttp:4.10.0' // Explicit OkHttp dependency
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     testImplementation 'junit:junit:4.13.2'

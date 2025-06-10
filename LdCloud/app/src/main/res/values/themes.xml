@@ -1,19 +1,28 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <style name="Theme.LdCloud" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/md_theme_light_primary</item>
-        <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
-        <item name="colorPrimaryContainer">@color/md_theme_light_primaryContainer</item>
-        <item name="colorOnPrimaryContainer">@color/md_theme_light_onPrimaryContainer</item>
-        <item name="colorSecondary">@color/md_theme_light_secondary</item>
-        <item name="colorOnSecondary">@color/md_theme_light_onSecondary</item>
-        <item name="colorSecondaryContainer">@color/md_theme_light_secondaryContainer</item>
-        <item name="colorOnSecondaryContainer">@color/md_theme_light_onSecondaryContainer</item>
-        <item name="colorTertiary">@color/md_theme_light_tertiary</item>
-        <item name="colorOnTertiary">@color/md_theme_light_onTertiary</item>
-        <item name="colorTertiaryContainer">@color/md_theme_light_tertiaryContainer</item>
-        <item name="colorOnTertiaryContainer">@color/md_theme_light_onTertiaryContainer</item>
+    <!-- Parent updated to enable Dynamic Colors -->
+    <style name="Theme.LdCloud" parent="Theme.Material3.DayNight.DynamicColors.NoActionBar">
+        <!-- Color definitions for Primary, Secondary, Tertiary are commented out
+             to allow Dynamic Colors to take effect on Android 12+.
+             On older versions, or when Dynamic Colors are off,
+             the parent Theme.Material3.DayNight provides the fallback palette.
+             The colors defined in colors.xml (md_theme_light/dark_*) will be used by this fallback.
+        -->
+        <!-- <item name="colorPrimary">@color/md_theme_light_primary</item> -->
+        <!-- <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item> -->
+        <!-- <item name="colorPrimaryContainer">@color/md_theme_light_primaryContainer</item> -->
+        <!-- <item name="colorOnPrimaryContainer">@color/md_theme_light_onPrimaryContainer</item> -->
+        <!-- <item name="colorSecondary">@color/md_theme_light_secondary</item> -->
+        <!-- <item name="colorOnSecondary">@color/md_theme_light_onSecondary</item> -->
+        <!-- <item name="colorSecondaryContainer">@color/md_theme_light_secondaryContainer</item> -->
+        <!-- <item name="colorOnSecondaryContainer">@color/md_theme_light_onSecondaryContainer</item> -->
+        <!-- <item name="colorTertiary">@color/md_theme_light_tertiary</item> -->
+        <!-- <item name="colorOnTertiary">@color/md_theme_light_onTertiary</item> -->
+        <!-- <item name="colorTertiaryContainer">@color/md_theme_light_tertiaryContainer</item> -->
+        <!-- <item name="colorOnTertiaryContainer">@color/md_theme_light_onTertiaryContainer</item> -->
+
+        <!-- Error, Background, Surface colors are often kept for more control,
+             but can also be derived if not specified. For now, we keep them. -->
         <item name="colorError">@color/md_theme_light_error</item>
         <item name="colorOnError">@color/md_theme_light_onError</item>
         <item name="colorErrorContainer">@color/md_theme_light_errorContainer</item>
@@ -25,15 +34,27 @@
         <item name="colorSurfaceVariant">@color/md_theme_light_surfaceVariant</item>
         <item name="colorOnSurfaceVariant">@color/md_theme_light_onSurfaceVariant</item>
         <item name="colorOutline">@color/md_theme_light_outline</item>
+
+        <!-- Inverse colors are important for components that need to contrast with main surfaces -->
         <item name="colorInverseSurface">@color/md_theme_light_inverseSurface</item>
         <item name="colorInverseOnSurface">@color/md_theme_light_inverseOnSurface</item>
         <item name="colorInversePrimary">@color/md_theme_light_inversePrimary</item>
-        <item name="colorSurfaceTint">@color/md_theme_light_surfaceTint</item>
+        <!-- colorSurfaceTint will be derived from colorPrimary by the M3 parent theme if not set,
+             or can be set to a specific color if needed. For Dynamic Colors, it's best to let it derive. -->
+        <!-- <item name="colorSurfaceTint">@color/md_theme_light_surfaceTint</item> -->
 
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor">@color/md_theme_light_primary</item>
-        <!-- Customize your theme here. -->
-        <item name="android:navigationBarColor">@color/md_theme_light_surfaceVariant</item>
+        <!-- Status bar and Navigation bar colors -->
+        <!-- For Dynamic Colors, these often adapt well automatically or can be set to transparent
+             to allow app content to draw behind, with system handling scrims.
+             Alternatively, set to specific surface/background colors from the dynamic palette.
+             For simplicity, we can let the parent theme handle status bar color for now,
+             or set it to something like ?attr/colorSurface for a common approach.
+             The navigation bar can be ?attr/colorSurface or ?attr/colorSurfaceVariant.
+        -->
+        <item name="android:statusBarColor">?attr/colorSurface</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item> <!-- Text/icons on status bar are light -->
+        <item name="android:navigationBarColor">?attr/colorSurfaceVariant</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item> <!-- Icons on nav bar are light -->
 
         <!-- Component Styles -->
         <item name="bottomNavigationStyle">@style/Widget.App.BottomNavigationView</item>
@@ -42,35 +63,51 @@
         <item name="textInputStyle">@style/Widget.App.TextInputLayout</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.App.MaterialAlertDialog</item>
         <item name="materialIconButtonStyle">@style/Widget.Material3.Button.IconButton</item> <!-- Added this line -->
+        <item name="materialIconButtonStyle">@style/Widget.Material3.Button.IconButton</item>
     </style>
 
     <!-- Component specific styles -->
+    <!-- These styles might need adjustments if their explicit color references
+         conflict with the dynamic theme. For now, they use explicit md_theme_light_* colors.
+         For full dynamic color effect, these might also need to use ?attr/ references
+         or have their own materialThemeOverlay set to a dynamic one.
+         However, BottomNavigationView often uses specific surface colors.
+    -->
     <style name="Widget.App.BottomNavigationView" parent="Widget.Material3.BottomNavigationView">
-        <item name="materialThemeOverlay">@null</item> <!-- Or a specific M3 overlay -->
-        <item name="android:background">@color/md_theme_light_surface</item>
-        <item name="itemIconTint">@color/bnv_tab_item_foreground</item>
-        <item name="itemTextColor">@color/bnv_tab_item_foreground</item>
+        <item name="android:background">?attr/colorSurface</item> <!-- Use dynamic surface -->
+        <item name="itemIconTint">@color/bnv_tab_item_foreground_dynamic</item> <!-- New CSL for dynamic -->
+        <item name="itemTextColor">@color/bnv_tab_item_foreground_dynamic</item> <!-- New CSL for dynamic -->
     </style>
 
     <style name="Widget.App.FloatingActionButton" parent="Widget.Material3.FloatingActionButton.Primary">
-        <item name="materialThemeOverlay">@null</item>
-        <item name="tint">@color/md_theme_light_onPrimary</item> <!-- Icon tint for primary FAB -->
+         <!-- Default M3 FABs should adapt well. If using Primary, icon tint should be onPrimary.
+              The parent Widget.Material3.FloatingActionButton.Primary should handle this.
+              Explicit tint might override dynamic behavior if not careful.
+              <item name="tint">?attr/colorOnPrimary</item>
+         -->
     </style>
 
     <style name="Widget.App.Button" parent="Widget.Material3.Button">
-        <item name="android:textAppearance">@style/TextAppearance.Material3.LabelLarge</item>
+        <!-- Default M3 buttons should adapt well. -->
     </style>
 
     <style name="Widget.App.TextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
-        <item name="boxStrokeColor">@color/md_theme_light_primary</item>
-        <item name="hintTextColor">@color/md_theme_light_primary</item>
+        <!-- Default M3 TextInputLayouts should adapt well.
+             Explicitly setting boxStrokeColor/hintTextColor to primary might be desired
+             even with dynamic colors, or remove to fully use M3 defaults.
+        <item name="boxStrokeColor">?attr/colorPrimary</item>
+        <item name="hintTextColor">?attr/colorPrimary</item>
+        -->
     </style>
 
-    <style name="ThemeOverlay.App.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
-        <item name="colorPrimary">@color/md_theme_light_primary</item>
-        <item name="colorSecondary">@color/md_theme_light_secondary</item>
-        <item name="colorSurface">@color/md_theme_light_surface</item>
-        <item name="colorOnSurface">@color/md_theme_light_onSurface</item>
+    <style name="ThemeOverlay.App.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog.DynamicColors">
+        <!-- Using .DynamicColors parent for AlertDialog ensures it also adapts.
+             Specific color overrides might not be needed here if the parent is dynamic.
+        <item name="colorPrimary">?attr/colorPrimary</item>
+        <item name="colorSecondary">?attr/colorSecondary</item>
+        <item name="colorSurface">?attr/colorSurface</item>
+        <item name="colorOnSurface">?attr/colorOnSurface</item>
+         -->
         <item name="alertDialogStyle">@style/MaterialAlertDialog.App</item>
     </style>
 

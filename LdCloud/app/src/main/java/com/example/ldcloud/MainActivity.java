@@ -41,8 +41,9 @@ public class MainActivity extends AppCompatActivity {
 
                     if (itemId == R.id.nav_files) {
                         selectedFragment = new FilesFragment();
-                    } else if (itemId == R.id.nav_uploads) {
-                        selectedFragment = new UploadsFragment();
+                    // Removed UploadsFragment case:
+                    // } else if (itemId == R.id.nav_uploads) {
+                    //    selectedFragment = new UploadsFragment();
                     } else if (itemId == R.id.nav_settings) {
                         selectedFragment = new SettingsFragment();
                     }
