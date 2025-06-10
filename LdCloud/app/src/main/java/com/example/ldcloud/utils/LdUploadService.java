@@ -7,43 +7,42 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences; // Adicionada para SharedPreferences
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.util.Log;
-// import android.util.Base64; // Não usado diretamente aqui
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
-import com.amazonaws.auth.BasicAWSCredentials; // Adicionado
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.mobile.client.AWSMobileClient;
 import com.amazonaws.mobile.client.Callback;
 import com.amazonaws.mobile.client.UserStateDetails;
-import com.amazonaws.mobileconnectors.s3.transferutility.TransferListener; // Adicionado
-import com.amazonaws.mobileconnectors.s3.transferutility.TransferObserver; // Adicionado
-import com.amazonaws.mobileconnectors.s3.transferutility.TransferState;   // Adicionado
+import com.amazonaws.mobileconnectors.s3.transferutility.TransferListener;
+import com.amazonaws.mobileconnectors.s3.transferutility.TransferObserver;
+import com.amazonaws.mobileconnectors.s3.transferutility.TransferState;
 import com.amazonaws.mobileconnectors.s3.transferutility.TransferUtility;
-import com.amazonaws.regions.Region; // Importação completa
-import com.amazonaws.regions.Regions; // Importação completa
-import com.amazonaws.services.s3.AmazonS3Client; // Adicionado (já estava mas garantido)
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.AmazonS3Client;
 
-import com.example.ldcloud.MainActivity; // Para PendingIntent
-import com.example.ldcloud.R; // Para ícones de notificação
+import com.example.ldcloud.MainActivity;
+import com.example.ldcloud.R;
 
-import org.json.JSONArray;    // Adicionado
-import org.json.JSONObject;   // Adicionado
-import org.json.JSONException;  // Adicionado
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONException;
 
-import java.io.File;                // Adicionado
-import java.io.FileOutputStream;    // Adicionado
-import java.io.IOException;         // Adicionado
-import java.io.InputStream;         // Adicionado
-import java.text.SimpleDateFormat;  // Adicionado
-import java.util.Date;              // Adicionado
-import java.util.Locale;            // Adicionado
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -51,30 +50,26 @@ public class LdUploadService extends Service {
 
     private static final String TAG = "LdUploadService";
     private static final String CHANNEL_ID = "LdUploadChannel";
-    private static final int NOTIFICATION_ID_FOREGROUND = 1; // ID para a notificação do foreground service
+    private static final int NOTIFICATION_ID_FOREGROUND = 1;
 
     private ExecutorService executorService;
     private PowerManager.WakeLock wakeLock;
     private NotificationManager notificationManager;
     private GitHubService gitHubService;
     private TransferUtility transferUtility;
-    private AmazonS3Client s3Client; // For TransferUtility
+    private AmazonS3Client s3Client;
 
-    // SharedPreferences Keys (algumas podem ser duplicadas de SettingsFragment, idealmente usar as de lá)
     private static final String PREFS_NAME = "LdCloudSettings";
     private static final String KEY_IA_ACCESS_KEY = "accessKey";
     private static final String KEY_IA_SECRET_KEY = "secretKey";
-    // KEY_IA_ITEM_TITLE, KEY_ROOT_JSON_PATH são passados via Intent ou lidos se necessário
 
-    // Chaves para os extras do Intent
+    private volatile boolean awsComponentsInitialized = false;
+
     public static final String EXTRA_FILE_URI = "fileUri";
     public static final String EXTRA_TARGET_S3_KEY = "targetS3Key";
-    public static final String EXTRA_FILE_SIZE = "fileSize"; // long
+    public static final String EXTRA_FILE_SIZE = "fileSize";
     public static final String EXTRA_IA_ITEM_TITLE = "iaItemTitle";
     public static final String EXTRA_PARENT_JSON_PATH = "parentJsonPath";
-    // As credenciais IA e GitHub podem ser lidas das SharedPreferences dentro do serviço
-    // ou passadas via Intent se houver necessidade de variar por upload.
-    // Por simplicidade, vamos assumir que o serviço as lê das SharedPreferences.
 
     @Override
     public void onCreate() {
@@ -85,7 +80,7 @@ public class LdUploadService extends Service {
         createNotificationChannel();
 
         executorService = Executors.newSingleThreadExecutor();
-        gitHubService = new GitHubService(this); // GitHubService precisa de Context
+        gitHubService = new GitHubService(this);
 
         PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         if (powerManager != null) {
@@ -95,40 +90,36 @@ public class LdUploadService extends Service {
             Log.e(TAG, "PowerManager não disponível.");
         }
 
-        // Inicializar AWSMobileClient - essencial para TransferUtility
-        // Esta inicialização é assíncrona. Operações que dependem dela devem esperar o callback.
         AWSMobileClient.getInstance().initialize(getApplicationContext(), new Callback<UserStateDetails>() {
-            @Override // Já estava presente, confirmado.
+            @Override
             public void onResult(UserStateDetails userStateDetails) {
                 Log.i(TAG, "AWSMobileClient inicializado. Estado do usuário: " + userStateDetails.getUserState());
-                // Inicializar TransferUtility aqui, pois depende do AWSMobileClient estar pronto.
                 SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
                 String iaAccessKey = prefs.getString(KEY_IA_ACCESS_KEY, null);
                 String iaSecretKey = prefs.getString(KEY_IA_SECRET_KEY, null);
 
                 if (iaAccessKey != null && iaSecretKey != null) {
                     BasicAWSCredentials credentials = new BasicAWSCredentials(iaAccessKey, iaSecretKey);
-                    // Usar uma instância de Region, não Regions.
-                    s3Client = new AmazonS3Client(credentials, com.amazonaws.regions.Region.getRegion(com.amazonaws.regions.Regions.US_EAST_1));
-                    s3Client.setEndpoint("s3.us.archive.org"); // IA S3 Endpoint
+                    s3Client = new AmazonS3Client(credentials, Region.getRegion(Regions.US_EAST_1));
+                    s3Client.setEndpoint("s3.us.archive.org");
 
                     transferUtility = TransferUtility.builder()
                                         .context(getApplicationContext())
                                         .s3Client(s3Client)
-                                        .awsConfiguration(AWSMobileClient.getInstance().getConfiguration()) // Adicionado para consistência
+                                        .awsConfiguration(AWSMobileClient.getInstance().getConfiguration())
                                         .build();
-                    Log.i(TAG, "TransferUtility inicializada com S3Client customizado para IA.");
+                    awsComponentsInitialized = true;
+                    Log.i(TAG, "Componentes AWS (S3Client e TransferUtility) inicializados com sucesso.");
                 } else {
-                    Log.e(TAG, "Credenciais do Internet Archive não encontradas. Upload S3 não funcionará.");
-                    // Considerar parar o serviço ou notificar o usuário de forma mais robusta.
+                    awsComponentsInitialized = false;
+                    Log.e(TAG, "Falha ao inicializar componentes AWS: credenciais IA ausentes.");
                 }
             }
 
-            @Override // Adicionado @Override
+            @Override
             public void onError(Exception e) {
-                Log.e(TAG, "Erro ao inicializar AWSMobileClient!", e);
-                // Lidar com o erro - talvez parar o serviço ou notificar o usuário
-                // que uploads não funcionarão.
+                awsComponentsInitialized = false;
+                Log.e(TAG, "Erro fatal ao inicializar AWSMobileClient! Componentes AWS não inicializados.", e);
             }
         });
         Log.d(TAG, "onCreate: LdUploadService criação concluída.");
@@ -143,19 +134,16 @@ public class LdUploadService extends Service {
             return START_NOT_STICKY;
         }
 
-        // Iniciar em primeiro plano com uma notificação inicial
-        // O conteúdo da notificação será atualizado conforme o progresso
-        Notification initialNotification = buildNotification("Preparando upload...", 0); // Renamed call
+        Notification initialNotification = buildNotification("Preparando upload...", 0);
+        Log.d(TAG, "onStartCommand: Chamando startForeground com NOTIFICATION_ID_FOREGROUND: " + NOTIFICATION_ID_FOREGROUND);
         startForeground(NOTIFICATION_ID_FOREGROUND, initialNotification);
+        Log.i(TAG, "onStartCommand: Serviço iniciado em primeiro plano.");
 
-        // Adquirir WakeLock antes de iniciar a tarefa no executor
         if (wakeLock != null && !wakeLock.isHeld()) {
-            Log.d(TAG, "Adquirindo WakeLock");
-            wakeLock.acquire(30*60*1000L /* timeout 30 minutos, por exemplo */);
+            Log.d(TAG, "onStartCommand: Adquirindo WakeLock.");
+            wakeLock.acquire(30*60*1000L);
         }
 
-        // Extrair parâmetros do Intent e iniciar a lógica de upload no executor
-        // (A lógica detalhada do upload será no Passo 3)
         final String fileUriString = intent.getStringExtra(EXTRA_FILE_URI);
         final String targetS3Key = intent.getStringExtra(EXTRA_TARGET_S3_KEY);
         final long fileSize = intent.getLongExtra(EXTRA_FILE_SIZE, 0);
@@ -163,26 +151,12 @@ public class LdUploadService extends Service {
         final String parentJsonPath = intent.getStringExtra(EXTRA_PARENT_JSON_PATH);
         final String fileNameForDisplay = targetS3Key != null ? targetS3Key : (fileUriString != null ? new File(Uri.parse(fileUriString).getPath()).getName() : "Arquivo desconhecido");
 
-
         Log.i(TAG, "Preparando para submeter tarefa de upload para: " + fileNameForDisplay);
         executorService.submit(() -> {
-            if (transferUtility == null) {
-                // AWSMobileClient.initialize() é assíncrono. Se não estiver pronto, transferUtility será null.
-                // Uma solução mais robusta usaria um CountDownLatch ou um loop com sleep/check
-                // para esperar a inicialização antes de prosseguir.
-                // Ou, falhar a tarefa de upload se não estiver pronto após um timeout.
-                Log.e(TAG, "TransferUtility não inicializado quando a tarefa de upload foi executada. AWSMobileClient.initialize() pode não ter completado ou falhado.");
-                // A notificação de erro será tratada dentro de handleUploadAndIndex se transferUtility for null lá.
-                 try {
-                    // Dar uma pequena chance para a inicialização assíncrona completar
-                    Thread.sleep(2000); // Espera 2 segundos
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                if (transferUtility == null) { // Checar novamente
-                     handleError("Erro interno: Serviço de upload não pronto.", fileNameForDisplay);
-                     return;
-                }
+            if (!awsComponentsInitialized || transferUtility == null) {
+                Log.e(TAG, "Upload não pode prosseguir: Componentes AWS não estão inicializados. awsComponentsInitialized=" + awsComponentsInitialized + ", transferUtilityIsNull=" + (transferUtility == null));
+                handleError("Serviço de upload não está pronto. Tente novamente em alguns instantes.", fileNameForDisplay);
+                return;
             }
             handleUploadAndIndex(fileUriString, fileNameForDisplay, targetS3Key, fileSize, iaItemTitle, parentJsonPath);
         });
@@ -192,9 +166,9 @@ public class LdUploadService extends Service {
 
     private void handleUploadAndIndex(String fileUriString, String fileNameForDisplay, String targetS3Key, long fileSize,
                                       String iaItemTitle, String parentJsonPath) {
-        Log.d(TAG, "handleUploadAndIndex: Iniciando para " + fileNameForDisplay + " S3Key: " + targetS3Key);
+        Log.i(TAG, "handleUploadAndIndex: Iniciado para arquivo: " + fileNameForDisplay + ", URI: " + fileUriString + ", S3Key: " + targetS3Key);
         Uri fileUri = Uri.parse(fileUriString);
-        File fileToUpload;
+        File fileToUpload = null;
 
         try {
             String tempFileName = "upload_temp_" + System.currentTimeMillis();
@@ -211,52 +185,58 @@ public class LdUploadService extends Service {
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     outputStream.write(buffer, 0, bytesRead);
                     totalBytesCopied += bytesRead;
-                    // Optionally, update notification with caching progress if it's slow
                 }
                 Log.i(TAG, "Arquivo copiado para o cache: " + fileToUpload.getAbsolutePath() + ", Bytes: " + totalBytesCopied);
             }
         } catch (Exception e) {
             Log.e(TAG, "Erro ao copiar arquivo do URI para o cache", e);
             handleError("Erro ao preparar arquivo para upload: " + e.getMessage(), fileNameForDisplay);
+            if (fileToUpload != null && fileToUpload.exists()) {
+                fileToUpload.delete();
+            }
             return;
         }
 
-        if (transferUtility == null) { // Re-check after potential sleep in onStartCommand
-            Log.e(TAG, "TransferUtility não está inicializada ao tentar upload!");
-            handleError("Serviço de upload não inicializado corretamente.", fileNameForDisplay);
-            if(fileToUpload.exists()) fileToUpload.delete();
+        if (!awsComponentsInitialized || transferUtility == null) {
+            Log.e(TAG, "Upload não pode prosseguir dentro de handleUploadAndIndex: Componentes AWS não estão inicializados.");
+            handleError("Serviço de upload não pronto (interno).", fileNameForDisplay);
+            if (fileToUpload != null && fileToUpload.exists()) {
+                fileToUpload.delete();
+            }
             return;
         }
 
-        Log.d(TAG, "Iniciando upload S3 para: " + iaItemTitle + "/" + targetS3Key);
+        final File finalFileToUpload = fileToUpload;
+        Log.d(TAG, "handleUploadAndIndex: Chamando transferUtility.upload() para " + iaItemTitle + "/" + targetS3Key);
         TransferObserver uploadObserver = transferUtility.upload(
                 iaItemTitle,
                 targetS3Key,
-                fileToUpload
+                finalFileToUpload
         );
 
-        uploadObserver.setTransferListener(new com.amazonaws.mobileconnectors.s3.transferutility.TransferListener() {
+        uploadObserver.setTransferListener(new TransferListener() {
             @Override
-            public void onStateChanged(int id, com.amazonaws.mobileconnectors.s3.transferutility.TransferState state) {
-                Log.d(TAG, "onStateChanged: " + fileNameForDisplay + " - " + state);
-                if (state == com.amazonaws.mobileconnectors.s3.transferutility.TransferState.COMPLETED) {
-                    Log.i(TAG, "Upload S3 para " + fileNameForDisplay + " COMPLETO.");
+            public void onStateChanged(int id, TransferState state) {
+                Log.d(TAG, "TransferListener.onStateChanged: " + fileNameForDisplay + " - " + state);
+                if (state == TransferState.COMPLETED) {
+                    Log.i(TAG, "S3 Upload COMPLETED para " + fileNameForDisplay + ". Iniciando indexação no GitHub.");
                     LdUploadService.this.updateNotification("Indexando " + fileNameForDisplay + "...", 100);
 
                     try {
                         JSONObject parentJson = gitHubService.getJsonFileContent(parentJsonPath);
                         if (parentJson == null) {
+                            Log.i(TAG, "uploadFileAndIndex: JSON pai não encontrado em " + parentJsonPath + ". Criando novo JSON pai em memória.");
                             parentJson = new JSONObject();
-                            parentJson.put("entries", new org.json.JSONArray());
+                            parentJson.put("entries", new JSONArray());
                         }
-                        org.json.JSONArray entries = parentJson.optJSONArray("entries");
-                        if (entries == null) entries = new org.json.JSONArray();
+                        JSONArray entries = parentJson.optJSONArray("entries");
+                        if (entries == null) entries = new JSONArray();
 
                         JSONObject newEntry = new JSONObject();
                         newEntry.put("name", fileNameForDisplay);
                         newEntry.put("type", "file");
                         newEntry.put("ia_s3_key", targetS3Key);
-                        newEntry.put("size", String.valueOf(fileToUpload.length())); // Use actual cached file size
+                        newEntry.put("size", String.valueOf(finalFileToUpload.length()));
                         newEntry.put("last_modified", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()));
 
                         boolean entryUpdated = false;
@@ -273,31 +253,31 @@ public class LdUploadService extends Service {
                         }
                         parentJson.put("entries", entries);
 
-                        if (gitHubService.updateJsonFile(parentJsonPath, parentJson, "Adicionado arquivo: " + fileNameForDisplay)) {
-                            Log.i(TAG, "Indexação no GitHub para " + fileNameForDisplay + " bem-sucedida.");
+                        boolean githubUpdateSuccess = gitHubService.updateJsonFile(parentJsonPath, parentJson, "Adicionado arquivo: " + fileNameForDisplay);
+                        Log.d(TAG, "uploadFileAndIndex: Atualização do JSON " + parentJsonPath + (githubUpdateSuccess ? " bem-sucedida." : " falhou."));
+                        if (githubUpdateSuccess) {
                             handleSuccess(fileNameForDisplay + " enviado e indexado com sucesso!");
                         } else {
-                            Log.e(TAG, "Falha ao indexar " + fileNameForDisplay + " no GitHub.");
                             handleError("Upload S3 OK, mas falha ao indexar no GitHub: " + fileNameForDisplay, fileNameForDisplay);
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "Erro durante a indexação no GitHub para " + fileNameForDisplay, e);
                         handleError("Erro na indexação GitHub: " + e.getMessage(), fileNameForDisplay);
                     } finally {
-                         if(fileToUpload.exists()) fileToUpload.delete();
+                         if(finalFileToUpload.exists()) finalFileToUpload.delete();
                     }
 
-                } else if (state == com.amazonaws.mobileconnectors.s3.transferutility.TransferState.FAILED ||
-                           state == com.amazonaws.mobileconnectors.s3.transferutility.TransferState.CANCELED) {
+                } else if (state == TransferState.FAILED || state == TransferState.CANCELED) {
                     Log.e(TAG, "Upload S3 para " + fileNameForDisplay + " falhou ou foi cancelado. Estado: " + state);
                     handleError("Falha no upload S3 para " + fileNameForDisplay, fileNameForDisplay);
-                    if(fileToUpload.exists()) fileToUpload.delete();
+                    if(finalFileToUpload.exists()) finalFileToUpload.delete();
                 }
             }
 
             @Override
             public void onProgressChanged(int id, long bytesCurrent, long bytesTotal) {
                 int progress = (int) ((double) bytesCurrent / bytesTotal * 100);
+                Log.v(TAG, "TransferListener.onProgressChanged: " + fileNameForDisplay + " - " + progress + "% (" + bytesCurrent + "/" + bytesTotal + ")");
                 LdUploadService.this.updateNotification("Enviando " + fileNameForDisplay + "...", progress);
             }
 
@@ -305,35 +285,37 @@ public class LdUploadService extends Service {
             public void onError(int id, Exception ex) {
                 Log.e(TAG, "Erro no upload S3 para " + fileNameForDisplay, ex);
                 handleError("Erro no upload S3: " + ex.getMessage(), fileNameForDisplay);
-                if(fileToUpload.exists()) fileToUpload.delete();
+                if(finalFileToUpload.exists()) finalFileToUpload.delete();
             }
         });
     }
 
     private void handleError(String errorMessage, String fileNameForDisplay) {
-        Log.e(TAG, "Erro no upload de " + fileNameForDisplay + ": " + errorMessage);
-        // Esta chamada a updateNotification já está no escopo da classe LdUploadService, não precisa de LdUploadService.this
+        Log.e(TAG, "handleError: Para arquivo '" + fileNameForDisplay + "', Erro: " + errorMessage);
         updateNotification("Erro: " + fileNameForDisplay, -1);
+        Log.d(TAG, "handleError: Chamando stopForeground(false).");
         stopForeground(false);
+        Log.d(TAG, "handleError: Postando notificação final de erro.");
         notificationManager.notify(NOTIFICATION_ID_FOREGROUND + 2, createFinalNotification("Erro no Upload de LdCloud", fileNameForDisplay + ": " + errorMessage, false));
         releaseResourcesAndStop();
     }
 
     private void handleSuccess(String message) {
-        Log.i(TAG, message);
-        // Esta chamada a updateNotification já está no escopo da classe LdUploadService, não precisa de LdUploadService.this
+        Log.i(TAG, "handleSuccess: " + message);
         updateNotification(message, 100);
+        Log.d(TAG, "handleSuccess: Chamando stopForeground(false).");
         stopForeground(false);
+        Log.d(TAG, "handleSuccess: Postando notificação final de sucesso.");
         notificationManager.notify(NOTIFICATION_ID_FOREGROUND + 1, createFinalNotification("LdCloud Upload", message, true));
         releaseResourcesAndStop();
     }
 
     private void releaseResourcesAndStop() {
         if (wakeLock != null && wakeLock.isHeld()) {
+            Log.d(TAG, "releaseResourcesAndStop: Liberando WakeLock.");
             wakeLock.release();
-            Log.d(TAG, "WakeLock liberado em releaseResourcesAndStop.");
         }
-        Log.d(TAG, "Parando o serviço (stopSelf).");
+        Log.d(TAG, "releaseResourcesAndStop: Chamando stopSelf().");
         stopSelf();
     }
 
@@ -342,8 +324,7 @@ public class LdUploadService extends Service {
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        // Usar ícones existentes ou criar/importar ic_success e ic_error
-        int icon = success ? R.drawable.ic_upload_fab : android.R.drawable.stat_notify_error;
+        int icon = success ? android.R.drawable.stat_sys_download_done : android.R.drawable.stat_notify_error;
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(title)
@@ -361,16 +342,15 @@ public class LdUploadService extends Service {
         return fileName.substring(fileName.lastIndexOf(".") + 1);
     }
 
-
     @Override
     public void onDestroy() {
         Log.d(TAG, "onDestroy: LdUploadService destruindo...");
         if (executorService != null && !executorService.isShutdown()) {
-            Log.d(TAG, "Desligando ExecutorService.");
+            Log.d(TAG, "onDestroy: Desligando ExecutorService.");
             executorService.shutdown();
         }
         if (wakeLock != null && wakeLock.isHeld()) {
-            Log.d(TAG, "Liberando WakeLock.");
+            Log.d(TAG, "onDestroy: Liberando WakeLock se ainda estiver retido.");
             wakeLock.release();
         }
         super.onDestroy();
@@ -379,7 +359,7 @@ public class LdUploadService extends Service {
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        return null; // Não é um serviço vinculado
+        return null;
     }
 
     private void createNotificationChannel() {
@@ -387,25 +367,25 @@ public class LdUploadService extends Service {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     "LdCloud Uploads",
-                    NotificationManager.IMPORTANCE_LOW); // LOW para não fazer som, mas ainda visível
+                    NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("Notificações para uploads de arquivos do LdCloud.");
             if (notificationManager != null) {
                 notificationManager.createNotificationChannel(channel);
-                Log.d(TAG, "Canal de notificação criado.");
+                Log.i(TAG, "Canal de notificação criado/atualizado: " + CHANNEL_ID);
             }
         }
     }
 
-    // Método para ATUALIZAR a notificação do foreground service
     private void updateNotification(String text, int progress) {
-        Notification notification = buildNotification(text, progress); // Call renamed buildNotification
+        Log.d(TAG, "updateNotification: Atualizando notificação ID " + NOTIFICATION_ID_FOREGROUND + " Texto: '" + text + "', Progresso: " + progress);
+        Notification notification = buildNotification(text, progress);
         if (notificationManager != null) {
+            Log.d(TAG, "updateNotification: Notificando com NotificationManager.");
             notificationManager.notify(NOTIFICATION_ID_FOREGROUND, notification);
         }
     }
 
-    // Método para CONSTRUIR notificações (usado por startForeground e updateNotification)
-    private Notification buildNotification(String text, int progress) { // Renamed from createNotification
+    private Notification buildNotification(String text, int progress) {
         Intent notificationIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -413,7 +393,7 @@ public class LdUploadService extends Service {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("LdCloud Upload")
                 .setContentText(text)
-                .setSmallIcon(R.drawable.ic_upload_fab)
+                .setSmallIcon(android.R.drawable.stat_sys_upload)
                 .setContentIntent(pendingIntent)
                 .setOnlyAlertOnce(true)
                 .setOngoing(true);

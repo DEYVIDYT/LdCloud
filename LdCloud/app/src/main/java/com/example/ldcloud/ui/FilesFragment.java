@@ -3,14 +3,19 @@ package com.example.ldcloud.ui;
 import android.app.Activity; // Para Activity.RESULT_OK em onActivityResult
 import android.content.Context;
 import android.content.Intent; // Adicionado
+import android.Manifest; // Para Manifest.permission.POST_NOTIFICATIONS
 import android.content.SharedPreferences;
-import android.database.Cursor; // Para getFileNameFromUri e getFileSizeFromUri
-import android.net.Uri; // Adicionado
-import android.os.Build; // Adicionado
+import android.content.pm.PackageManager; // Adicionado
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-import android.provider.OpenableColumns; // Para getFileNameFromUri e getFileSizeFromUri
+import android.provider.OpenableColumns;
+import androidx.activity.result.ActivityResultLauncher; // Adicionado
+import androidx.activity.result.contract.ActivityResultContracts; // Adicionado
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat; // Adicionado
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -56,6 +61,9 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
     private String rootJsonPath;
     private String iaItemTitle; // For S3 operations like creating folder markers
 
+    private ActivityResultLauncher<String> requestPermissionLauncher;
+    // private Uri pendingFileUriForUpload; // Não usado com a lógica atual de pedir permissão ANTES
+
     public FilesFragment() {
         // Required empty public constructor
     }
@@ -65,9 +73,20 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
         super.onCreate(savedInstanceState);
         if (getContext() != null) {
             internetArchiveService = new InternetArchiveService(getContext());
-            // SharedPreferences initialized here, but values loaded in onViewCreated or onResume
-            // to ensure fragment is attached to activity for requireActivity().
         }
+
+        // Inicializar o ActivityResultLauncher para permissões
+        requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+            if (isGranted) {
+                Log.d(TAG, "Permissão POST_NOTIFICATIONS concedida via launcher.");
+                openFileSelector(); // Permissão concedida, prosseguir para abrir o seletor de arquivos
+            } else {
+                Log.w(TAG, "Permissão POST_NOTIFICATIONS NÃO concedida via launcher.");
+                Toast.makeText(getContext(), "Permissão de notificação negada. Uploads podem não mostrar progresso.", Toast.LENGTH_LONG).show();
+                // Opcional: Abrir o seletor mesmo assim, ou desabilitar a funcionalidade de upload
+                // openFileSelector(); // Descomentar se quiser permitir upload mesmo sem notificação
+            }
+        });
     }
 
     @Override
@@ -312,9 +331,23 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
         builder.setTitle("Escolha uma ação");
         builder.setItems(items, (dialog, item) -> {
             if (items[item].equals("Nova Pasta")) {
-                showCreateFolderDialog(); // Existing method
+                showCreateFolderDialog();
             } else if (items[item].equals("Upload de Arquivo")) {
-                openFileSelector();
+                // Verificar e solicitar permissão POST_NOTIFICATIONS antes de abrir o seletor
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                        Log.d(TAG, "Permissão POST_NOTIFICATIONS já concedida.");
+                        openFileSelector();
+                    } else {
+                        // Não precisa de shouldShowRequestPermissionRationale aqui para simplificar,
+                        // o sistema lida com "não perguntar novamente".
+                        Log.d(TAG, "Solicitando permissão POST_NOTIFICATIONS...");
+                        requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+                    }
+                } else {
+                    // Versões anteriores ao Android 13 não precisam desta permissão de tempo de execução
+                    openFileSelector();
+                }
             }
         });
         builder.show();
