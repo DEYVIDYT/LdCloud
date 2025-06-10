@@ -253,12 +253,13 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
         }
         s3FolderPath += folderName + "/";
 
+        final String finalS3FolderPath = s3FolderPath; // Effectively final variable for use in lambda
 
         Log.d(TAG, "Creating folder: " + folderName +
                    ", parentJsonPath: " + currentJsonPath +
                    ", newDirJsonFileName: " + newDirJsonFileName +
                    ", iaItemTitle: " + iaItemTitle +
-                   ", s3FolderPath: " + s3FolderPath);
+                   ", s3FolderPath: " + finalS3FolderPath);
 
         Toast.makeText(getContext(), "Creating folder '" + folderName + "'...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
@@ -267,7 +268,7 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
                     currentJsonPath,
                     newDirJsonFileName,
                     iaItemTitle, // IA S3 bucket name
-                    s3FolderPath // S3 "folder" key
+                    finalS3FolderPath // Use the effectively final variable
             );
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
