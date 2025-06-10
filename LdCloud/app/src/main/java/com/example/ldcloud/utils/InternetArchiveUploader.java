@@ -14,10 +14,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException; // Adicionado
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder; // Adicionado
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException; // Adicionado para tratar NoSuchAlgorithmException
+import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -80,64 +82,93 @@ public class InternetArchiveUploader {
 
     public boolean uploadFile(String itemId, String remoteFileName, File fileToUpload, UploadCallback callback) {
         HttpURLConnection connection = null;
+        String encodedRemoteFileName;
+
         try {
-            // 1. (Opcional) Criar o item se ele não existir - pode ser feito separadamente
-            // if (!checkOrCreateItem(itemId)) {
-            //     callback.onFailure("Falha ao verificar/criar item no Internet Archive.");
-            //     return false;
-            // }
+            // Codificar o remoteFileName para uso no URL e na stringToSign
+            try {
+                encodedRemoteFileName = URLEncoder.encode(remoteFileName, "UTF-8");
+                encodedRemoteFileName = encodedRemoteFileName.replace("+", "%20"); // S3/IA S3-like behavior with spaces
+                Log.d(TAG, "Nome do arquivo original: " + remoteFileName + ", Nome codificado para URL/S3: " + encodedRemoteFileName);
+            } catch (UnsupportedEncodingException e) {
+                Log.e(TAG, "Erro de codificação UTF-8 para remoteFileName: " + remoteFileName, e);
+                if (callback != null) {
+                    callback.onFailure("Erro interno: Falha ao codificar nome do arquivo.");
+                }
+                return false;
+            }
+
+            // 1. (Opcional) Criar o item - Removido para focar no upload
 
             // 2. Configurar a conexão para o upload do arquivo
-            URL url = new URL("https://s3.us.archive.org/" + itemId + "/" + remoteFileName);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("PUT");
-            connection.setDoOutput(true); // Essencial para PUT com corpo
-            connection.setUseCaches(false);
+            String uploadUrl = "https://s3.us.archive.org/" + itemId + "/" + encodedRemoteFileName; // Use encoded name
 
-            // Cabeçalhos necessários
+            // Cabeçalhos necessários (usar remoteFileName original para stringToSign se essa for a expectativa do IA)
+            // A stringToSign para S3 geralmente usa o caminho NÃO codificado.
+            // No entanto, o caminho no URL HTTP deve ser codificado.
+            // Vamos assumir que a stringToSign DEVE usar o nome do arquivo original (não codificado).
+            // O recurso no cabeçalho HTTP é /bucket/key, e a key aqui é o remoteFileName original.
+
             SimpleDateFormat sdf = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.US);
             sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
             String dateHeader = sdf.format(new Date());
 
             String fileMd5 = calculateAndGetMd5ForInternalFile(fileToUpload);
             if (fileMd5 == null) {
-                callback.onFailure("Não foi possível calcular o MD5 do arquivo.");
+                if (callback != null) callback.onFailure("Não foi possível calcular o MD5 do arquivo.");
                 return false;
             }
 
-            connection.setRequestProperty("Date", dateHeader);
-            connection.setRequestProperty("Content-MD5", fileMd5);
-            connection.setRequestProperty("Content-Type", "application/octet-stream"); // Ou tipo MIME específico
-            connection.setRequestProperty("Content-Length", String.valueOf(fileToUpload.length()));
-
-            // Cabeçalhos x-archive-meta-* (opcional, mas útil para metadados)
-            // connection.setRequestProperty("x-archive-meta-title", "Título do Arquivo");
-            // connection.setRequestProperty("x-archive-meta-collection", "mediatype:data"); // Exemplo
+            String contentType = "application/octet-stream"; // Ou tipo MIME específico
+            long contentLength = fileToUpload.length();
 
             // Cabeçalho de Autorização
             String stringToSign = "PUT\n" +
                                   fileMd5 + "\n" +
-                                  "application/octet-stream" + "\n" +
+                                  contentType + "\n" +
                                   dateHeader + "\n" +
                                   // Adicionar cabeçalhos x-amz-* e x-archive-* aqui se usados, em ordem alfabética
-                                  // Ex: "x-archive-meta-collection:mediatype:data\n" +
-                                  //     "x-archive-meta-title:Título do Arquivo\n" +
-                                  "/" + itemId + "/" + remoteFileName;
+                                  "/" + itemId + "/" + remoteFileName; // StringToSign usa o nome NÃO codificado
 
             String signature = generateSignature(stringToSign);
             if (signature == null) {
-                callback.onFailure("Falha ao gerar assinatura de autorização.");
+                if (callback != null) callback.onFailure("Falha ao gerar assinatura de autorização.");
                 return false;
             }
+
+            Log.d(TAG, "--- Detalhes da Requisição de Upload IA ---");
+            Log.d(TAG, "URL Completo (com nome codificado): " + uploadUrl);
+            Log.d(TAG, "StringToSign (com nome original): [" + stringToSign.replace("\n", "\\n") + "]");
+            Log.d(TAG, "Assinatura Gerada (Signature): " + signature);
+            Log.d(TAG, "Header Authorization: LOW " + accessKey + ":" + signature);
+            Log.d(TAG, "Header Date: " + dateHeader);
+            Log.d(TAG, "Header Content-Type: " + contentType);
+            Log.d(TAG, "Header Content-MD5: " + fileMd5);
+            Log.d(TAG, "Header Content-Length (calculado): " + contentLength);
+            Log.d(TAG, "--- Fim dos Detalhes da Requisição ---");
+
+            URL url = new URL(uploadUrl); // URL usa o nome CODIFICADO
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("PUT");
+            connection.setDoOutput(true); // Essencial para PUT com corpo
+            connection.setUseCaches(false);
+
+            connection.setRequestProperty("Date", dateHeader);
+            connection.setRequestProperty("Content-MD5", fileMd5);
+            connection.setRequestProperty("Content-Type", contentType);
+            connection.setRequestProperty("Content-Length", String.valueOf(contentLength));
+
+            // Cabeçalhos x-archive-meta-* (opcional)
+            // connection.setRequestProperty("x-archive-meta-title", "Seu Título de Arquivo");
+            // connection.setRequestProperty("x-archive-meta-collection", "mediatype:data");
+
             connection.setRequestProperty("Authorization", "LOW " + accessKey + ":" + signature);
 
-            Log.d(TAG, "Iniciando upload para: " + url.toString());
-            Log.d(TAG, "Cabeçalhos: " + connection.getRequestProperties().toString());
-            Log.d(TAG, "String para Assinar: \n" + stringToSign);
-
+            // Log dos cabeçalhos efetivamente configurados (após serem setados)
+            // Log.d(TAG, "Cabeçalhos Reais Configurados: " + connection.getRequestProperties().toString()); // Pode ser muito verboso
 
             // 3. Enviar o arquivo
-            connection.setFixedLengthStreamingMode(fileToUpload.length()); // Para arquivos grandes
+            connection.setFixedLengthStreamingMode(contentLength);
 
             try (DataOutputStream dos = new DataOutputStream(connection.getOutputStream());
                  FileInputStream fis = new FileInputStream(fileToUpload)) {
@@ -161,11 +192,11 @@ public class InternetArchiveUploader {
             int responseCode = connection.getResponseCode();
             Log.i(TAG, "Código de Resposta do Upload: " + responseCode);
 
-            if (responseCode >= 200 && responseCode < 300) { // Sucesso (200 OK, 201 Created, 204 No Content)
-                if (callback != null) callback.onSuccess("Arquivo '" + remoteFileName + "' enviado com sucesso para o item " + itemId);
+            if (responseCode >= 200 && responseCode < 300) {
+                if (callback != null) callback.onSuccess("Arquivo '" + remoteFileName + "' enviado com sucesso para o item " + itemId + " (URL: " + uploadUrl + ")"); // Adicionar URL ao sucesso
                 return true;
             } else {
-                String errorMessage = "Falha no upload: " + responseCode + " " + connection.getResponseMessage();
+                String errorMessage = "Falha no upload para '" + remoteFileName +"': " + responseCode + " " + connection.getResponseMessage();
                 // Ler corpo do erro se houver
                 InputStream errorStream = connection.getErrorStream();
                 if (errorStream != null) {
@@ -185,7 +216,7 @@ public class InternetArchiveUploader {
 
         } catch (Exception e) {
             Log.e(TAG, "Exceção durante o upload", e);
-            if (callback != null) callback.onFailure("Exceção: " + e.getMessage());
+                if (callback != null) callback.onFailure("Exceção durante o upload: " + e.getMessage());
             return false;
         } finally {
             if (connection != null) {
@@ -251,10 +282,16 @@ public class InternetArchiveUploader {
                                   "x-archive-meta-collection:mediatype:data\n" +
                                   "x-archive-meta-title:" + title + "\n" +
                                   // Adicionar outros x-archive-meta-* aqui em ordem alfabética
-                                  "/" + itemId + "/" + itemId + "_meta.xml"; // Ou o path do recurso sendo acessado
+                                  // Note: Se o remoteFileName em stringToSign para metadados também precisar ser codificado,
+                                  // essa lógica precisaria ser aplicada aqui também.
+                                  // Para S3, o resource path na stringToSign é geralmente não codificado.
+                                  "/" + itemId + "/" + (itemId + "_meta.xml"); // Usar nome de arquivo original para stringToSign
 
             String signature = generateSignature(stringToSign);
-            if (signature == null) return false;
+            if (signature == null) {
+                Log.e(TAG, "Falha ao gerar assinatura para criação de item: " + itemId);
+                return false;
+            }
             connection.setRequestProperty("Authorization", "LOW " + accessKey + ":" + signature);
 
             Log.d(TAG, "Tentando criar/atualizar item: " + itemId + " com título: " + title);
