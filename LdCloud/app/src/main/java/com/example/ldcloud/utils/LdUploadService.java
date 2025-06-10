@@ -18,9 +18,9 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.mobile.client.AWSMobileClient;
-import com.amazonaws.mobile.client.Callback;
-import com.amazonaws.mobile.client.UserStateDetails;
+// import com.amazonaws.mobile.client.AWSMobileClient; // Removido
+// import com.amazonaws.mobile.client.Callback; // Removido
+// import com.amazonaws.mobile.client.UserStateDetails; // Removido
 import com.amazonaws.mobileconnectors.s3.transferutility.TransferListener;
 import com.amazonaws.mobileconnectors.s3.transferutility.TransferObserver;
 import com.amazonaws.mobileconnectors.s3.transferutility.TransferState;
@@ -51,7 +51,7 @@ public class LdUploadService extends Service {
     private static final String TAG = "LdUploadService";
     private static final String CHANNEL_ID = "LdUploadChannel";
     private static final int NOTIFICATION_ID_FOREGROUND = 1;
-    private static final int NOTIFICATION_ID_ERROR_INIT = 2; // ID diferente
+    private static final int NOTIFICATION_ID_ERROR_INIT = 2;
 
     private ExecutorService executorService;
     private PowerManager.WakeLock wakeLock;
@@ -78,7 +78,7 @@ public class LdUploadService extends Service {
         Log.d(TAG, "onCreate: LdUploadService criando...");
 
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        createNotificationChannel(); // Log for channel creation is inside this method
+        createNotificationChannel();
 
         executorService = Executors.newSingleThreadExecutor();
         gitHubService = new GitHubService(this);
@@ -91,83 +91,40 @@ public class LdUploadService extends Service {
             Log.e(TAG, "PowerManager não disponível.");
         }
 
-        // AWSMobileClient.getInstance().initialize(getApplicationContext(), new Callback<UserStateDetails>() {
-        //     @Override
-        //     public void onResult(UserStateDetails userStateDetails) {
-        //         Log.i(TAG, "AWSMobileClient inicializado. Estado do usuário: " + userStateDetails.getUserState());
-        //         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        //         String iaAccessKey = prefs.getString(KEY_IA_ACCESS_KEY, null);
-        //         String iaSecretKey = prefs.getString(KEY_IA_SECRET_KEY, null);
-        //
-        //         if (iaAccessKey != null && iaSecretKey != null) {
-        //             BasicAWSCredentials credentials = new BasicAWSCredentials(iaAccessKey, iaSecretKey);
-        //             s3Client = new AmazonS3Client(credentials, com.amazonaws.regions.Region.getRegion(com.amazonaws.regions.Regions.US_EAST_1));
-        //             s3Client.setEndpoint("s3.us.archive.org");
-        //
-        //             transferUtility = TransferUtility.builder()
-        //                             .context(getApplicationContext())
-        //                             .s3Client(s3Client)
-        //                             .awsConfiguration(AWSMobileClient.getInstance().getConfiguration())
-        //                             .build();
-        //             awsComponentsInitialized = true;
-        //             Log.i(TAG, "Componentes AWS (S3Client e TransferUtility) inicializados com sucesso.");
-        //         } else {
-        //             awsComponentsInitialized = false;
-        //             Log.e(TAG, "Falha ao inicializar componentes AWS: credenciais IA ausentes.");
-        //         }
-        //     }
-        //
-        //     @Override
-        //     public void onError(Exception e) {
-        //         awsComponentsInitialized = false;
-        //         Log.e(TAG, "Erro fatal ao inicializar AWSMobileClient! Componentes AWS não inicializados.", e);
-        // Descomentado e modificado:
-        AWSMobileClient.getInstance().initialize(getApplicationContext(), new Callback<UserStateDetails>() {
-            @Override
-            public void onResult(UserStateDetails userStateDetails) {
-                Log.i(TAG, "AWSMobileClient inicializado. Estado do usuário: " + userStateDetails.getUserState());
-                try {
-                    SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-                    String iaAccessKey = prefs.getString(KEY_IA_ACCESS_KEY, null);
-                    String iaSecretKey = prefs.getString(KEY_IA_SECRET_KEY, null);
+        // Inicialização Direta de S3Client e TransferUtility
+        Log.d(TAG, "onCreate: Tentando inicializar S3Client e TransferUtility diretamente.");
+        this.awsComponentsInitialized = false; // Começa como falso por padrão
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            String iaAccessKey = prefs.getString(KEY_IA_ACCESS_KEY, null);
+            String iaSecretKey = prefs.getString(KEY_IA_SECRET_KEY, null);
 
-                    // Corrigido para checar isEmpty também para iaSecretKey
-                    if (iaAccessKey != null && !iaAccessKey.isEmpty() && iaSecretKey != null && !iaSecretKey.isEmpty()) {
-                        BasicAWSCredentials credentials = new BasicAWSCredentials(iaAccessKey, iaSecretKey);
-                        s3Client = new AmazonS3Client(credentials, com.amazonaws.regions.Region.getRegion(com.amazonaws.regions.Regions.US_EAST_1));
-                        s3Client.setEndpoint("s3.us.archive.org");
+            if (iaAccessKey != null && !iaAccessKey.isEmpty() && iaSecretKey != null && !iaSecretKey.isEmpty()) {
+                BasicAWSCredentials credentials = new BasicAWSCredentials(iaAccessKey, iaSecretKey);
+                s3Client = new AmazonS3Client(credentials, com.amazonaws.regions.Region.getRegion(com.amazonaws.regions.Regions.US_EAST_1));
+                s3Client.setEndpoint("s3.us.archive.org");
+                Log.i(TAG, "AmazonS3Client para IA configurado diretamente.");
 
-                        transferUtility = TransferUtility.builder()
-                                        .context(getApplicationContext())
-                                        .s3Client(s3Client)
-                                        .awsConfiguration(AWSMobileClient.getInstance().getConfiguration())
-                                        .build();
-                        Log.i(TAG, "TransferUtility inicializada com S3Client customizado para IA.");
-                        awsComponentsInitialized = true;
-                        Log.i(TAG, "Componentes AWS (S3Client e TransferUtility) inicializados com sucesso.");
-                    } else {
-                        Log.e(TAG, "Falha ao inicializar componentes AWS: credenciais IA ausentes ou incompletas.");
-                        awsComponentsInitialized = false;
-                        handleEarlyInitializationError("Credenciais do Internet Archive ausentes ou incompletas. Verifique as Configurações.");
-                    }
-                } catch (Exception e) { // Capturar qualquer exceção durante a inicialização de S3/TransferUtility
-                    Log.e(TAG, "Exceção ao configurar S3Client/TransferUtility", e);
-                    awsComponentsInitialized = false;
-                    handleEarlyInitializationError("Erro ao configurar S3/TransferUtility: " + e.getMessage());
-                }
+                transferUtility = TransferUtility.builder()
+                                .context(getApplicationContext())
+                                .s3Client(s3Client)
+                                // .awsConfiguration(AWSMobileClient.getInstance().getConfiguration()) // Removido pois AWSMobileClient não é mais inicializado aqui
+                                .build();
+                Log.i(TAG, "TransferUtility inicializada diretamente com S3Client customizado para IA.");
+                this.awsComponentsInitialized = true;
+                Log.i(TAG, "Componentes AWS (S3Client e TransferUtility) inicializados diretamente com sucesso.");
+            } else {
+                Log.e(TAG, "Falha ao inicializar componentes AWS diretamente: credenciais IA ausentes ou incompletas.");
+                // this.awsComponentsInitialized permanece false
+                handleEarlyInitializationError("Credenciais do Internet Archive ausentes ou incompletas. Verifique as Configurações.");
             }
+        } catch (Exception e) {
+            Log.e(TAG, "Exceção ao inicializar S3Client/TransferUtility diretamente", e);
+            // this.awsComponentsInitialized permanece false
+            handleEarlyInitializationError("Erro ao configurar S3/TransferUtility: " + e.getMessage());
+        }
 
-            @Override
-            public void onError(Exception e) {
-                awsComponentsInitialized = false;
-                Log.e(TAG, "Erro fatal ao inicializar AWSMobileClient! Componentes AWS não inicializados.", e);
-                handleEarlyInitializationError("Falha crítica ao inicializar o serviço AWS: " + e.getMessage());
-            }
-        });
-        // Removido: this.awsComponentsInitialized = true;
-        // Removido: Log.w(TAG, "onCreate: INICIALIZAÇÃO AWS FOI CONTORNADA...");
-
-        Log.d(TAG, "onCreate: LdUploadService criação concluída."); // Log restaurado/mantido
+        Log.d(TAG, "onCreate: LdUploadService criação concluída.");
     }
 
     private void handleEarlyInitializationError(String errorMessage) {
@@ -180,7 +137,7 @@ public class LdUploadService extends Service {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Erro de Inicialização LdCloud")
                 .setContentText(errorMessage)
-                .setSmallIcon(android.R.drawable.stat_notify_error) // Ícone de erro do sistema
+                .setSmallIcon(android.R.drawable.stat_notify_error)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true);
 
@@ -191,7 +148,6 @@ public class LdUploadService extends Service {
         Log.d(TAG, "Parando o serviço devido a erro de inicialização.");
         stopSelf();
     }
-
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -245,16 +201,15 @@ public class LdUploadService extends Service {
             return START_NOT_STICKY;
         }
 
-        // Manter Comentada a Submissão ao executorService por enquanto:
         // Log.d(TAG, "onStartCommand: Preparando para submeter tarefa ao executorService.");
-        // executorService.submit(() -> {
-        //     if (!awsComponentsInitialized || transferUtility == null) {
-        //         Log.e(TAG, "Upload não pode prosseguir: Componentes AWS não estão inicializados. awsComponentsInitialized=" + awsComponentsInitialized + ", transferUtilityIsNull=" + (transferUtility == null));
-        //         handleError("Serviço de upload não está pronto. Tente novamente em alguns instantes.", fileNameForDisplay);
-        //         return;
-        //     }
-        //     handleUploadAndIndex(fileUriString, fileNameForDisplay, targetS3Key, fileSize, iaItemTitle, parentJsonPath);
-        // });
+        executorService.submit(() -> { // This will be uncommented in the next step
+            if (!awsComponentsInitialized || transferUtility == null) {
+                Log.e(TAG, "Upload não pode prosseguir: Componentes AWS não estão inicializados. awsComponentsInitialized=" + awsComponentsInitialized + ", transferUtilityIsNull=" + (transferUtility == null));
+                handleError("Serviço de upload não está pronto. Tente novamente em alguns instantes.", fileNameForDisplay);
+                return;
+            }
+            handleUploadAndIndex(fileUriString, fileNameForDisplay, targetS3Key, fileSize, iaItemTitle, parentJsonPath);
+        });
 
         return START_NOT_STICKY;
     }
@@ -292,7 +247,7 @@ public class LdUploadService extends Service {
             return;
         }
 
-        if (!awsComponentsInitialized || transferUtility == null) { // This check will now rely on the artificial true for awsComponentsInitialized
+        if (!awsComponentsInitialized || transferUtility == null) {
             Log.e(TAG, "Upload não pode prosseguir dentro de handleUploadAndIndex: Componentes AWS não estão inicializados (transferUtility é nulo).");
             handleError("Serviço de upload não pronto (interno - transferUtility nulo).", fileNameForDisplay);
             if (fileToUpload != null && fileToUpload.exists()) {
