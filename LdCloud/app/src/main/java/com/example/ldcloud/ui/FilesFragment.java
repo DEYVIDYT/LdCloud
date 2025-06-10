@@ -294,3 +294,5 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
     }
 
     // The duplicate showCreateFolderDialog() that was here has been removed by the previous diff block.
+
+}

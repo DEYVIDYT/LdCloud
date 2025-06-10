@@ -35,8 +35,7 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
         ArchiveFile file = archiveFiles.get(position);
         holder.fileName.setText(file.getName());
 
-        String details;
-        String details;
+        String details; // Single declaration
         if (file.isDirectory()) {
             holder.fileIcon.setImageResource(R.drawable.ic_vector_folder);
             details = "Folder | Modified: " + file.lastModified; // Use public field

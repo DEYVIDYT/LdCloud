@@ -123,12 +123,12 @@ public class InternetArchiveService {
                     Log.w(TAG, "GitHub connection test failed: root JSON was null (file not found or other error).");
                 }
             } catch (IOException e) {
-                Log.e(TAG, "Caught IOException during GitHub testConnection: " + e.getClass().getName()); // This was actually referring to java.io.IOException
+                // This IOException is thrown by gitHubService.getJsonFileContent for any internal error,
+                // including JSONException that it catches and wraps.
+                Log.e(TAG, "Caught IOException during GitHub testConnection (likely from getJsonFileContent): " + e.getClass().getName());
                 Log.e(TAG, "GitHub Connection Test Failed: " + e.getMessage(), e);
-            } catch (JSONException e) { // Catch JSONException from getJsonFileContent if it throws it
-                 Log.e(TAG, "Caught JSONException during GitHub testConnection: " + e.getClass().getName());
-                 Log.e(TAG, "GitHub Connection Test Failed (JSON Parsing): " + e.getMessage(), e);
             }
+            // Removed unreachable catch (JSONException e) block
         }
         return s3Ok && githubOk;
     }
