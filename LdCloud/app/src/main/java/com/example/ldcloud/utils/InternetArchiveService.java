@@ -15,8 +15,8 @@ import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.AmazonClientException; // Replaced SdkClientException
+// Removed: import com.amazonaws.AmazonServiceException;
+// Removed: import com.amazonaws.AmazonClientException;
 
 // Standard Java imports
 import java.io.ByteArrayInputStream;
@@ -89,12 +89,9 @@ public class InternetArchiveService {
             s3Client.listObjectsV2(new ListObjectsV2Request().withBucketName(itemTitleAsBucketName).withMaxKeys(1));
             Log.i(TAG, "S3 connection test successful for bucket: " + itemTitleAsBucketName);
             return true;
-        } catch (AmazonServiceException e) {
-            Log.e(TAG, "S3 Connection Test Failed (AmazonServiceException): " + e.getMessage(), e);
-        } catch (AmazonClientException e) { // Replaced SdkClientException
-            Log.e(TAG, "S3 Connection Test Failed (AmazonClientException): " + e.getMessage(), e);
         } catch (Exception e) {
-            Log.e(TAG, "S3 Connection Test Failed (Exception): " + e.getMessage(), e);
+            Log.e(TAG, "Caught exception type: " + e.getClass().getName());
+            Log.e(TAG, "S3 Connection Test Failed: " + e.getMessage(), e);
         }
         return false;
     }
@@ -183,12 +180,9 @@ public class InternetArchiveService {
 
             Log.i(TAG, "Successfully listed " + archiveFiles.size() + " S3 objects for bucket: " + itemTitleAsBucketName + ", Path: " + prefix);
 
-        } catch (AmazonServiceException e) {
-            Log.e(TAG, "AmazonServiceException listing S3 objects: " + e.getMessage(), e);
-        } catch (AmazonClientException e) { // Replaced SdkClientException
-            Log.e(TAG, "AmazonClientException listing S3 objects: " + e.getMessage(), e);
         } catch (Exception e) {
-            Log.e(TAG, "Unexpected exception listing S3 objects: " + e.getMessage(), e);
+            Log.e(TAG, "Caught exception type: " + e.getClass().getName());
+            Log.e(TAG, "Exception listing S3 objects: " + e.getMessage(), e);
         }
         return archiveFiles;
     }
@@ -221,12 +215,9 @@ public class InternetArchiveService {
             s3Client.putObject(putObjectRequest);
             Log.i(TAG, "S3 Upload successful for: " + remoteFileNameInItemAsKey);
             return true;
-        } catch (AmazonServiceException e) {
-            Log.e(TAG, "AmazonServiceException during S3 upload: " + e.getMessage(), e);
-        } catch (AmazonClientException e) { // Replaced SdkClientException
-            Log.e(TAG, "AmazonClientException during S3 upload: " + e.getMessage(), e);
         } catch (Exception e) {
-            Log.e(TAG, "Unexpected exception during S3 upload: " + e.getMessage(), e);
+            Log.e(TAG, "Caught exception type: " + e.getClass().getName());
+            Log.e(TAG, "Exception during S3 upload: " + e.getMessage(), e);
         }
         return false;
     }
@@ -249,14 +240,9 @@ public class InternetArchiveService {
             s3Client.getObject(getObjectRequest, localTargetFile);
             Log.i(TAG, "S3 Download successful to: " + localTargetFile.getAbsolutePath());
             return true;
-        } catch (AmazonServiceException e) {
-            Log.e(TAG, "AmazonServiceException during S3 download: " + e.getMessage(), e);
-            if (localTargetFile.exists()) { localTargetFile.delete(); }
-        } catch (AmazonClientException e) { // Replaced SdkClientException
-            Log.e(TAG, "AmazonClientException during S3 download: " + e.getMessage(), e);
-            if (localTargetFile.exists()) { localTargetFile.delete(); }
         } catch (Exception e) {
-            Log.e(TAG, "Unexpected exception during S3 download: " + e.getMessage(), e);
+            Log.e(TAG, "Caught exception type: " + e.getClass().getName());
+            Log.e(TAG, "Exception during S3 download: " + e.getMessage(), e);
             if (localTargetFile.exists()) { localTargetFile.delete(); }
         }
         return false;
@@ -289,12 +275,9 @@ public class InternetArchiveService {
             s3Client.putObject(putObjectRequest);
             Log.i(TAG, "Folder created successfully: " + formattedFolderName);
             return true;
-        } catch (AmazonServiceException e) {
-            Log.e(TAG, "AmazonServiceException during folder creation: " + e.getMessage(), e);
-        } catch (SdkClientException e) {
-            Log.e(TAG, "SdkClientException during folder creation: " + e.getMessage(), e);
         } catch (Exception e) {
-            Log.e(TAG, "Unexpected exception during folder creation: " + e.getMessage(), e);
+            Log.e(TAG, "Caught exception type: " + e.getClass().getName());
+            Log.e(TAG, "Exception during folder creation: " + e.getMessage(), e);
         }
         return false;
     }
