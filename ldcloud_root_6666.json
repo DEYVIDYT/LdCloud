@@ -1,3 +1,10 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "name": "teste",
+      "type": "directory",
+      "json_path": "ldcloud_root_6666_teste.json",
+      "last_modified": "2025-06-10 12:51:59"
+    }
+  ]
 }
