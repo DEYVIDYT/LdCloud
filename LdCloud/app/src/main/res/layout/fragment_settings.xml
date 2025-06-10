@@ -11,49 +11,54 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Access Key"
-            style="?android:attr/textAppearanceMedium" />
-
-        <EditText
-            android:id="@+id/edit_text_access_key"
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/text_input_layout_access_key"
+            style="?attr/textInputStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="text"
-            android:hint="Enter Access Key" />
+            android:hint="Access Key">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Secret Key"
-            style="?android:attr/textAppearanceMedium"
-            android:layout_marginTop="16dp"/>
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_text_access_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <EditText
-            android:id="@+id/edit_text_secret_key"
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/text_input_layout_secret_key"
+            style="?attr/textInputStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textPassword"
-            android:hint="Enter Secret Key" />
+            android:layout_marginTop="16dp"
+            android:hint="Secret Key">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Item Title"
-            style="?android:attr/textAppearanceMedium"
-            android:layout_marginTop="16dp"/>
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_text_secret_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <EditText
-            android:id="@+id/edit_text_item_title"
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/text_input_layout_item_title"
+            style="?attr/textInputStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="text"
-            android:hint="Enter Item Title" />
+            android:layout_marginTop="16dp"
+            android:hint="Item Title">
 
-        <Button
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_text_item_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/button_save_settings"
+            style="?attr/materialButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"

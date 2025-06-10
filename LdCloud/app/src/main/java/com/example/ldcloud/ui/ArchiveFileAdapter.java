@@ -34,14 +34,15 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         ArchiveFile file = archiveFiles.get(position);
         holder.fileName.setText(file.getName());
-        String details = "Size: " + file.getSize() + " | Modified: " + file.getLastModifiedDate();
-        holder.fileDetails.setText(details);
 
+        String details;
         if (file.isDirectory()) {
-            holder.fileIcon.setImageResource(android.R.drawable.ic_menu_save); // Placeholder folder icon
+            holder.fileIcon.setImageResource(android.R.drawable.ic_folder); // Standard folder icon
+            details = "Folder | Modified: " + file.getLastModifiedDate();
             holder.downloadButton.setVisibility(View.GONE); // Hide download for directories
         } else {
             holder.fileIcon.setImageResource(android.R.drawable.ic_menu_gallery); // Placeholder file icon
+            details = "Size: " + file.getSize() + " bytes | Modified: " + file.getLastModifiedDate();
             holder.downloadButton.setVisibility(View.VISIBLE);
             holder.downloadButton.setOnClickListener(v -> {
                 if (callbacks != null) {
@@ -49,6 +50,7 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
                 }
             });
         }
+        holder.fileDetails.setText(details);
     }
 
     @Override
@@ -68,7 +70,7 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
         ImageView fileIcon;
         TextView fileName;
         TextView fileDetails;
-        ImageView downloadButton; // Changed from ImageButton to ImageView if only icon is needed, or keep as ImageButton
+        ImageView downloadButton;
 
         ViewHolder(View itemView) {
             super(itemView);

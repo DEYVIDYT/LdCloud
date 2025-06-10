@@ -12,7 +12,7 @@
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
         android:text="Uploads Fragment - Click button to upload"
-        android:textSize="18sp" />
+        android:textAppearance="?attr/textAppearanceTitleMedium" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_upload_file"
@@ -21,7 +21,7 @@
         android:layout_alignParentEnd="true"
         android:layout_alignParentBottom="true"
         android:layout_margin="16dp"
-        android:src="@android:drawable/ic_menu_upload"
+        android:src="@drawable/ic_upload_fab"
         app:fabSize="normal"
         android:contentDescription="Upload File"/>
 

@@ -31,7 +31,7 @@ android {
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.10.0' // Added Material Components library
-    implementation 'org.archive:archive-sdk:3.0.3' // Added Internet Archive SDK
+    // implementation 'org.archive:archive-sdk:3.0.3' // REMOVED Internet Archive SDK
     implementation 'com.amazonaws:aws-android-sdk-s3:2.59.0' // AWS S3 SDK
     implementation 'com.amazonaws:aws-android-sdk-core:2.59.0' // AWS Core Runtime
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'

@@ -24,6 +24,7 @@
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
         android:text="No files found or error loading files."
+        android:textAppearance="?attr/textAppearanceBodyLarge"
         android:visibility="gone" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -33,7 +34,7 @@
         android:layout_alignParentEnd="true"
         android:layout_alignParentBottom="true"
         android:layout_margin="16dp"
-        android:src="@android:drawable/ic_input_add"
+        android:src="@drawable/ic_create_folder_fab"
         android:contentDescription="Create Folder"
         app:fabSize="normal"
         xmlns:app="http://schemas.android.com/apk/res-auto"/>

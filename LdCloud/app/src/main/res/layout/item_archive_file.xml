@@ -10,14 +10,14 @@
         android:id="@+id/image_view_file_icon"
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:src="@android:drawable/ic_menu_help" /> <!-- Placeholder icon -->
+        android:src="@drawable/ic_files_filled" /> <!-- Default/Fallback icon -->
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="16dp"
         android:layout_marginEnd="8dp">
 
         <TextView
@@ -25,24 +25,23 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="File Name"
-            style="?android:attr/textAppearanceListItem"
-            android:textSize="16sp" />
+            android:textAppearance="?attr/textAppearanceTitleMedium" />
 
         <TextView
             android:id="@+id/text_view_file_details"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Size | Date"
-            android:textSize="12sp" />
+            android:textAppearance="?attr/textAppearanceBodySmall" />
     </LinearLayout>
 
     <ImageButton
         android:id="@+id/button_download_file"
+        style="?attr/materialIconButtonStyle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:src="@android:drawable/stat_sys_download"
+        android:src="@drawable/ic_download_item"
         android:contentDescription="Download File"
-        android:background="?attr/selectableItemBackgroundBorderless"
         android:padding="8dp"/>
 
 </LinearLayout>

@@ -4,37 +4,27 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
-import org.archive.accesscontrol.AccessControlClient;
-import org.archive.accesscontrol.AccessControlQuery;
-import org.archive.accesscontrol.AccessControlResponse;
-import org.archive.io.ArchiveReader;
-import org.archive.io.ArchiveRecord;
-import org.archive.io.arc.ARCReaderFactory;
-import org.archive.credential.Credential;
-import org.archive.credential.CredentialStore;
-import org.archive.credential.SimpleCredentialStore;
-import org.archive.ia.metadata.ўным.File; // Specific class for file metadata
-import org.archive.ia.metadata.ўным.Item;
-import org.archive.ia.metadata.ўным.Metadata;
-import org.archive.ia.metadata.ўным.factory.XmlMetadataParser;
-import org.archive.ia.metadata.ўным.http.HttpIAMetadataSource;
-
+// AWS S3 specific imports
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata; // For creating folders
+import com.amazonaws.services.s3.model.ListObjectsV2Request; // For S3 listing
+import com.amazonaws.services.s3.model.ListObjectsV2Result; // For S3 listing
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.S3ObjectSummary; // For S3 listing
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.SdkClientException;
 
-import java.io.ByteArrayInputStream; // For creating folders
+import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.InputStream; // For creating folders
+import java.io.InputStream;
+import java.text.SimpleDateFormat; // For formatting dates
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map; // For iterating file map if necessary
+import java.util.Locale; // For date formatting
 
 public class InternetArchiveService {
 
@@ -46,9 +36,9 @@ public class InternetArchiveService {
     private String accessKey;
     private String secretKey;
     private boolean credentialsLoaded = false;
-    private CredentialStore credentialStore; // Keep for archive-sdk metadata operations
-    private HttpIAMetadataSource metadataSource; // Keep for archive-sdk metadata operations
-    private AmazonS3Client s3Client; // AWS S3 Client for uploads
+    // private CredentialStore credentialStore; // REMOVED - No longer using archive-sdk
+    // private HttpIAMetadataSource metadataSource; // REMOVED - No longer using archive-sdk
+    private AmazonS3Client s3Client; // AWS S3 Client
 
 
     public InternetArchiveService(Context context) {
@@ -56,32 +46,25 @@ public class InternetArchiveService {
         this.accessKey = sharedPreferences.getString(KEY_ACCESS_KEY, null);
         this.secretKey = sharedPreferences.getString(KEY_SECRET_KEY, null);
 
-        // Initialize HttpIAMetadataSource for metadata operations (archive-sdk)
-        this.metadataSource = new HttpIAMetadataSource(new XmlMetadataParser());
+        // REMOVED HttpIAMetadataSource initialization
 
         if (this.accessKey != null && !this.accessKey.isEmpty() && this.secretKey != null && !this.secretKey.isEmpty()) {
             this.credentialsLoaded = true;
-            Log.i(TAG, "Credentials loaded successfully for S3 client and archive-sdk.");
+            Log.i(TAG, "Credentials loaded successfully for S3 client.");
 
-            // Initialize archive-sdk credential store (if still needed for other ops)
-            this.credentialStore = new SimpleCredentialStore();
-            this.credentialStore.addCredential(new Credential(this.accessKey, this.secretKey));
+            // REMOVED archive-sdk credential store initialization
 
             // Initialize AWS S3 Client
             BasicAWSCredentials credentials = new BasicAWSCredentials(this.accessKey, this.secretKey);
             this.s3Client = new AmazonS3Client(credentials);
-            // It's crucial to set the correct region AND endpoint for Internet Archive.
-            // IA's S3 endpoint is not a standard AWS region.
-            // The region might seem arbitrary (like US_EAST_1) but is often required by the SDK.
-            // The endpoint is the key.
             try {
-                this.s3Client.setRegion(Region.getRegion(Regions.US_EAST_1)); // Common default, may not matter if endpoint is set
+                this.s3Client.setRegion(Region.getRegion(Regions.US_EAST_1));
                 this.s3Client.setEndpoint("s3.us.archive.org");
                 Log.i(TAG, "AmazonS3Client initialized with IA endpoint and region.");
             } catch (Exception e) {
                 Log.e(TAG, "Error initializing AmazonS3Client: " + e.getMessage(), e);
-                this.s3Client = null; // Ensure s3Client is null if initialization fails
-                this.credentialsLoaded = false; // Mark as not loaded if S3 client fails
+                this.s3Client = null;
+                this.credentialsLoaded = false;
             }
         } else {
             this.credentialsLoaded = false;
