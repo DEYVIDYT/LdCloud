@@ -39,7 +39,7 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
         String details;
         if (file.isDirectory()) {
             holder.fileIcon.setImageResource(R.drawable.ic_vector_folder);
-            details = "Folder | Modified: " + file.getLastModifiedDate();
+            details = "Folder | Modified: " + file.lastModified; // Use public field
             holder.downloadButton.setVisibility(View.GONE);
             holder.itemView.setOnClickListener(v -> { // Click listener for the whole item
                 if (callbacks != null) {
@@ -48,7 +48,7 @@ public class ArchiveFileAdapter extends RecyclerView.Adapter<ArchiveFileAdapter.
             });
         } else {
             holder.fileIcon.setImageResource(android.R.drawable.ic_menu_gallery);
-            details = "Size: " + file.getSize() + " bytes | Modified: " + file.getLastModifiedDate();
+            details = "Size: " + file.size + " bytes | Modified: " + file.lastModified; // Use public fields
             holder.downloadButton.setVisibility(View.VISIBLE);
             holder.downloadButton.setOnClickListener(v -> {
                 if (callbacks != null) {

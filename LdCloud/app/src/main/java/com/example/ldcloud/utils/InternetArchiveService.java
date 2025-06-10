@@ -19,6 +19,11 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 // Removed: import com.amazonaws.AmazonClientException;
 
 // Standard Java imports
+import org.json.JSONObject; // Added
+import org.json.JSONArray;  // Added
+import org.json.JSONException; // Added
+import java.io.IOException;    // Added
+
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
@@ -118,8 +123,11 @@ public class InternetArchiveService {
                     Log.w(TAG, "GitHub connection test failed: root JSON was null (file not found or other error).");
                 }
             } catch (IOException e) {
-                Log.e(TAG, "Caught IOException during GitHub testConnection: " + e.getClass().getName());
+                Log.e(TAG, "Caught IOException during GitHub testConnection: " + e.getClass().getName()); // This was actually referring to java.io.IOException
                 Log.e(TAG, "GitHub Connection Test Failed: " + e.getMessage(), e);
+            } catch (JSONException e) { // Catch JSONException from getJsonFileContent if it throws it
+                 Log.e(TAG, "Caught JSONException during GitHub testConnection: " + e.getClass().getName());
+                 Log.e(TAG, "GitHub Connection Test Failed (JSON Parsing): " + e.getMessage(), e);
             }
         }
         return s3Ok && githubOk;
@@ -148,15 +156,13 @@ public class InternetArchiveService {
             JSONObject jsonDirectory = gitHubService.getJsonFileContent(jsonPath);
             if (jsonDirectory == null) {
                 Log.e(TAG, "Directory JSON not found or error fetching from GitHub: " + jsonPath);
-                // Consider creating an empty directory JSON here if it's a new/empty directory.
-                // For now, just returning empty.
                 return archiveFiles;
             }
 
-            org.json.JSONArray entries = jsonDirectory.optJSONArray("entries");
+            JSONArray entries = jsonDirectory.optJSONArray("entries"); // Use the imported JSONArray
             if (entries != null) {
                 for (int i = 0; i < entries.length(); i++) {
-                    JSONObject entry = entries.getJSONObject(i);
+                    JSONObject entry = entries.getJSONObject(i); // Use the imported JSONObject
                     String name = entry.getString("name");
                     String type = entry.getString("type");
                     boolean isDirectory = "directory".equalsIgnoreCase(type);
@@ -172,7 +178,7 @@ public class InternetArchiveService {
              Log.i(TAG, "Successfully loaded " + archiveFiles.size() + " entries from: " + jsonPath);
         } catch (IOException e) {
             Log.e(TAG, "IOException while loading files/folders from GitHub JSON: " + jsonPath, e);
-        } catch (org.json.JSONException e) {
+        } catch (JSONException e) { // Use the imported JSONException
             Log.e(TAG, "JSONException while parsing GitHub JSON: " + jsonPath, e);
         }
         return archiveFiles;
@@ -223,21 +229,19 @@ public class InternetArchiveService {
             }
 
             // Create new entry for the uploaded file
-            java.io.File uploadedFile = new java.io.File(localFilePath);
-            JSONObject newEntry = new JSONObject();
+            java.io.File uploadedFile = new java.io.File(localFilePath); // Explicitly java.io.File
+            JSONObject newEntry = new JSONObject(); // Use imported JSONObject
             newEntry.put("name", uploadedFile.getName());
             newEntry.put("type", "file");
             newEntry.put("ia_s3_key", targetS3Key);
             newEntry.put("size", String.valueOf(uploadedFile.length()));
             newEntry.put("last_modified", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date(uploadedFile.lastModified())));
-            // jsonPath for a file is null
 
-            // Check if entry already exists, update if so, otherwise add
             boolean entryUpdated = false;
             for (int i = 0; i < entries.length(); i++) {
-                JSONObject currentEntry = entries.getJSONObject(i);
+                JSONObject currentEntry = entries.getJSONObject(i); // Use imported JSONObject
                 if (uploadedFile.getName().equals(currentEntry.optString("name")) && "file".equals(currentEntry.optString("type"))) {
-                    entries.put(i, newEntry); // Replace existing entry
+                    entries.put(i, newEntry);
                     entryUpdated = true;
                     break;
                 }
@@ -251,7 +255,6 @@ public class InternetArchiveService {
 
             if (!githubUpdateSuccess) {
                 Log.e(TAG, "uploadFileAndIndex: Failed to update GitHub JSON index at " + parentJsonPath);
-                // Consider S3 cleanup or a retry mechanism here if critical
             } else {
                 Log.i(TAG, "uploadFileAndIndex: GitHub JSON index updated successfully at " + parentJsonPath);
             }
@@ -259,7 +262,7 @@ public class InternetArchiveService {
 
         } catch (IOException e) {
             Log.e(TAG, "uploadFileAndIndex: IOException during GitHub JSON update: " + e.getMessage(), e);
-        } catch (org.json.JSONException e) {
+        } catch (JSONException e) { // Use imported JSONException
             Log.e(TAG, "uploadFileAndIndex: JSONException during GitHub JSON update: " + e.getMessage(), e);
         }
         return false;
@@ -289,8 +292,8 @@ public class InternetArchiveService {
 
         try {
             // 1. Create the JSON file for the new directory (e.g., "newDirName.json" or "path/newDirName/index.json")
-            JSONObject newDirJson = new JSONObject();
-            newDirJson.put("entries", new org.json.JSONArray()); // New directory is empty
+            JSONObject newDirJson = new JSONObject(); // Use imported JSONObject
+            newDirJson.put("entries", new JSONArray()); // Use imported JSONArray - New directory is empty
 
             boolean newDirJsonCreated = gitHubService.updateJsonFile(newDirJsonFileName, newDirJson, "Created directory structure for " + newDirName);
             if (!newDirJsonCreated) {
@@ -300,31 +303,28 @@ public class InternetArchiveService {
             Log.i(TAG, "createDirectoryAndIndex: New directory JSON created on GitHub: " + newDirJsonFileName);
 
             // 2. Update the parent directory's JSON to include an entry for the new directory
-            JSONObject parentJson = gitHubService.getJsonFileContent(parentJsonPath);
+            JSONObject parentJson = gitHubService.getJsonFileContent(parentJsonPath); // Use imported JSONObject
             if (parentJson == null) {
-                // If parent JSON doesn't exist, create it. This might happen for the root.
                 Log.w(TAG, "createDirectoryAndIndex: Parent JSON '" + parentJsonPath + "' not found. Creating new one.");
-                parentJson = new JSONObject();
-                parentJson.put("entries", new org.json.JSONArray());
+                parentJson = new JSONObject(); // Use imported JSONObject
+                parentJson.put("entries", new JSONArray()); // Use imported JSONArray
             }
 
-            org.json.JSONArray parentEntries = parentJson.optJSONArray("entries");
+            JSONArray parentEntries = parentJson.optJSONArray("entries"); // Use imported JSONArray
             if (parentEntries == null) {
-                parentEntries = new org.json.JSONArray();
+                parentEntries = new JSONArray(); // Use imported JSONArray
                 parentJson.put("entries", parentEntries);
             }
 
-            JSONObject newDirEntry = new JSONObject();
+            JSONObject newDirEntry = new JSONObject(); // Use imported JSONObject
             newDirEntry.put("name", newDirName);
             newDirEntry.put("type", "directory");
-            newDirEntry.put("json_path", newDirJsonFileName); // Path to the new directory's own JSON index
+            newDirEntry.put("json_path", newDirJsonFileName);
             newDirEntry.put("last_modified", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()));
-            // ia_s3_key and size are not typically relevant for a directory entry itself that points to another JSON
 
-            // Check if entry already exists, update if so (though less likely for dirs), otherwise add
             boolean entryUpdatedOrAdded = false;
             for (int i = 0; i < parentEntries.length(); i++) {
-                JSONObject currentEntry = parentEntries.getJSONObject(i);
+                JSONObject currentEntry = parentEntries.getJSONObject(i); // Use imported JSONObject
                 if (newDirName.equals(currentEntry.optString("name")) && "directory".equals(currentEntry.optString("type"))) {
                     parentEntries.put(i, newDirEntry);
                     entryUpdatedOrAdded = true;
@@ -338,26 +338,23 @@ public class InternetArchiveService {
             boolean parentJsonUpdated = gitHubService.updateJsonFile(parentJsonPath, parentJson, "Added subdirectory: " + newDirName);
             if (!parentJsonUpdated) {
                 Log.e(TAG, "createDirectoryAndIndex: Failed to update parent JSON (" + parentJsonPath + ") with new directory entry.");
-                // Here, we might have a partial success (new dir JSON created, but parent not updated).
-                // For simplicity, returning false. A more robust solution might try to delete newDirJsonFileName.
                 return false;
             }
             Log.i(TAG, "createDirectoryAndIndex: Parent JSON updated successfully with new directory: " + newDirName);
 
-            // 3. (Optional) Create S3 folder marker
             if (itemTitleAsBucketName != null && !itemTitleAsBucketName.isEmpty() && s3FolderPath != null && !s3FolderPath.isEmpty()) {
-                boolean s3FolderCreated = createFolder(itemTitleAsBucketName, s3FolderPath); // Uses the existing S3 createFolder
+                boolean s3FolderCreated = createFolder(itemTitleAsBucketName, s3FolderPath);
                 if (!s3FolderCreated) {
                     Log.w(TAG, "createDirectoryAndIndex: Failed to create S3 folder marker at " + s3FolderPath + " (this is optional).");
                 } else {
                     Log.i(TAG, "createDirectoryAndIndex: S3 folder marker created at " + s3FolderPath);
                 }
             }
-            return true; // Main GitHub operations succeeded
+            return true;
 
         } catch (IOException e) {
             Log.e(TAG, "createDirectoryAndIndex: IOException: " + e.getMessage(), e);
-        } catch (org.json.JSONException e) {
+        } catch (JSONException e) { // Use imported JSONException
             Log.e(TAG, "createDirectoryAndIndex: JSONException: " + e.getMessage(), e);
         }
         return false;

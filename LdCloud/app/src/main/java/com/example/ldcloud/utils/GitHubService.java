@@ -5,8 +5,8 @@ import android.content.SharedPreferences;
 import android.util.Base64; // Para decodificar conteúdo do GitHub
 import android.util.Log;
 
-import org.json.JSONObject; // Para manipular JSON
-
+import org.json.JSONObject;
+import org.json.JSONException; // Adicionado para tratamento de erro
 import java.io.IOException;
 
 import okhttp3.MediaType;
@@ -140,7 +140,14 @@ public class GitHubService {
         }
 
         // 2. Preparar conteúdo e fazer PUT request
-        String newContentBase64 = Base64.encodeToString(newJsonData.toString(2).getBytes(), Base64.NO_WRAP); // Usar toString(2) para pretty print
+        String newJsonString;
+        try {
+            newJsonString = newJsonData.toString(2); // pretty print com indentação
+        } catch (JSONException e) {
+            Log.e(TAG, "Erro ao converter JSONObject para String no updateJsonFile para: " + filePath, e);
+            throw new IOException("Erro ao formatar JSON para atualização: " + e.getMessage(), e);
+        }
+        String newContentBase64 = Base64.encodeToString(newJsonString.getBytes(), Base64.NO_WRAP);
 
         JSONObject payload = new JSONObject();
         try {
@@ -149,7 +156,7 @@ public class GitHubService {
             if (currentFileSha != null && !currentFileSha.isEmpty()) {
                 payload.put("sha", currentFileSha);
             }
-        } catch (org.json.JSONException e) {
+        } catch (JSONException e) { // Usar JSONException importado
              Log.e(TAG, "Erro ao criar payload JSON para update", e);
             throw new IOException("Erro ao criar payload JSON: " + e.getMessage(), e);
         }

@@ -132,7 +132,7 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
                         recyclerViewFiles.setVisibility(View.VISIBLE);
                         textViewNoFiles.setVisibility(View.GONE);
                     } else {
-                        Log.w(TAG, "No files found or error loading files for item: " + itemTitle);
+                        Log.w(TAG, "No files found or error loading files for JSON path: " + jsonPathToLoad + " (S3 Bucket: " + iaItemTitle + ")");
                         Toast.makeText(getContext(), "No files found or error fetching list.", Toast.LENGTH_LONG).show();
                         textViewNoFiles.setVisibility(View.VISIBLE);
                         recyclerViewFiles.setVisibility(View.GONE);
@@ -152,10 +152,9 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
             return;
         }
         Log.d(TAG, "Download requested for: " + file.getName());
-        String itemTitle = sharedPreferences.getString(KEY_ITEM_TITLE, null);
-
-        if (itemTitle == null || itemTitle.isEmpty()) {
-            Toast.makeText(getContext(), "Item Title not set in Settings. Cannot download.", Toast.LENGTH_LONG).show();
+        // Use the class field iaItemTitle which is loaded in onViewCreated
+        if (this.iaItemTitle == null || this.iaItemTitle.isEmpty()) {
+            Toast.makeText(getContext(), "IA Item Title (S3 Bucket) not set in Settings. Cannot download.", Toast.LENGTH_LONG).show();
             return;
         }
         if (file.isDirectory()) {
@@ -178,7 +177,8 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
 
         // Perform download on a background thread
         new Thread(() -> {
-            boolean success = internetArchiveService.downloadFile(itemTitle, file.getName(), localTargetFile);
+            // Use this.iaItemTitle for the bucket name
+            boolean success = internetArchiveService.downloadFile(this.iaItemTitle, file.getIaS3Key() != null ? file.getIaS3Key() : file.getName(), localTargetFile);
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     if (success) {
@@ -191,8 +191,11 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
         }).start();
     }
 
+    // Removed the duplicate, incomplete showCreateFolderDialog() method.
+    // The first one (above createNewFolder) is kept.
+    // Syntax correction for the remaining showCreateFolderDialog:
     private void showCreateFolderDialog() {
-        if (getContext() == null) return;
+        if (getContext() == null) { return; } // Corrected syntax
 
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setTitle("Create New Folder");
@@ -290,5 +293,4 @@ public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbac
         }
     }
 
-    private void showCreateFolderDialog() {
-        if (getContext() == null) return;
+    // The duplicate showCreateFolderDialog() that was here has been removed by the previous diff block.

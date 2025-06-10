@@ -161,18 +161,28 @@ public class UploadsFragment extends Fragment {
             // In a real app, run this in a background thread
             // Ensure this part is executed off the main thread if not already.
             // For this exercise, direct call is shown.
+            String originalFileName = fileName; // Renaming for clarity to match parameter name for uploadFileAndIndex
+            String targetS3Key = originalFileName; // Simple S3 key strategy
+
             new Thread(() -> {
-                final boolean success = internetArchiveService.uploadFile(itemTitle, cacheFile.getAbsolutePath(), fileName);
+                // Use the new orchestrated method
+                final boolean success = internetArchiveService.uploadFileAndIndex(
+                        cacheFile.getAbsolutePath(),
+                        targetS3Key,
+                        parentJsonPathForUpload, // Class field, loaded in onCreate
+                        iaItemTitleForUpload     // Class field, loaded in onCreate
+                );
+
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         if (success) {
-                            Toast.makeText(getContext(), "File '" + fileName + "' upload successful via S3.", Toast.LENGTH_LONG).show();
+                            Toast.makeText(getContext(), "Upload and index for '" + originalFileName + "' successful!", Toast.LENGTH_LONG).show();
                         } else {
-                            Toast.makeText(getContext(), "File '" + fileName + "' upload failed via S3.", Toast.LENGTH_LONG).show();
+                            Toast.makeText(getContext(), "Upload and/or index for '" + originalFileName + "' failed.", Toast.LENGTH_LONG).show();
                         }
-                        // Optionally delete the cache file after attempting upload
+
                         if (cacheFile.exists()) {
-                            if(cacheFile.delete()){
+                            if (cacheFile.delete()) {
                                 Log.i(TAG, "Cache file deleted: " + cacheFile.getAbsolutePath());
                             } else {
                                 Log.w(TAG, "Failed to delete cache file: " + cacheFile.getAbsolutePath());
