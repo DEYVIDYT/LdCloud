@@ -41,8 +41,9 @@ import android.os.Environment;
 
 // Importa a nova interface e o BottomSheet
 import com.example.ldcloud.ui.FolderActionsBottomSheet;
+import com.example.ldcloud.ui.ArchiveFileAdapterCallbacks; // Explicit import for clarity
 
-public class FilesFragment extends Fragment implements ArchiveFileAdapter.ArchiveFileAdapterCallbacks, FolderActionsBottomSheet.FolderActionsListener {
+public class FilesFragment extends Fragment implements ArchiveFileAdapterCallbacks, FolderActionsBottomSheet.FolderActionsListener {
 
     private static final String TAG = "FilesFragment"; // TAG já estava definido
     private static final String SHARED_PREFS_NAME = "LdCloudSettings";

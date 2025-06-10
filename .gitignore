@@ -1,0 +1,56 @@
+# Android Studio
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# Crashlytics
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+
+# Keystore file
+*.jks
+*.keystore
+
+# Google Services
+google-services.json
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log files
+*.log
+
+# Android Studio Profiler
+*.hprof
+
+# Distribution folder
+/dist/
+/release/
+
+# Misc
+*.lock
+*.DS_Store
+*.tmp
+*.swp
+*.swo
+
+# Generated class files
+*.class
+
+# Buck
+buck-out/
+\.buckd/
+*.buckconfig.local
